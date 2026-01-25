@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+import math
+
 import pandas as pd
 
 from .models import EntryPlan, ExitDecision, Position, TradeSignal
@@ -91,8 +93,10 @@ class TradeRules:
         entry_px = entry_price if entry_type == "next_open" else suggested_price
         atr = _safe_float(ctx.get("atr14"), entry_px * 0.02)
         ob = ctx.get("ob") or {}
-        stop_loss = float(ob.get("invalidation", entry_px - atr * self.stop_atr_mult))
-        if stop_loss >= entry_px:
+        stop_loss = _safe_float(ob.get("invalidation"), entry_px - atr * self.stop_atr_mult)
+        if not math.isfinite(stop_loss):
+            stop_loss = entry_px - atr * self.stop_atr_mult
+        if not math.isfinite(stop_loss) or stop_loss >= entry_px:
             stop_loss = entry_px * (1 - self.min_risk_ratio)
         risk_per_share = max(1e-6, entry_px - stop_loss)
         take_profit = entry_px + self.rr_target * risk_per_share
