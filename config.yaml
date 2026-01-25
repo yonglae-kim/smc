@@ -63,6 +63,27 @@ backtest:
   slippage_bps: 5
   max_positions: 10
   risk_per_trade: 0.01
+  strategy_params:
+    threshold: 3.0
+    min_room_to_high_atr: 0.75
+    room_to_high_levels: [[1.5, 0.75], [2.5, 1.5], [4.0, 2.5]]
+    w_momentum_20: 0.75
+    w_momentum_60: 1.5
+    w_momentum_60_negative: -1.5
+    ma20_slope_atr_threshold: 0.15
+    w_ma20_slope: 1.0
+    atr_ratio_low: 0.9
+    atr_ratio_high: 1.4
+    w_atr_ratio_low: 0.75
+    w_atr_ratio_high: -1.0
+    ob_quality_strong: 2.0
+    ob_quality_min: 1.0
+    w_ob_quality_strong: 1.0
+    w_ob_quality_weak: -0.5
+    ob_age_max: 60
+    w_ob_age_old: -0.5
+    fvg_age_max: 60
+    w_fvg_age_old: -0.5
   tp:
     rr_target: 2.0
     partial_rr: 1.0

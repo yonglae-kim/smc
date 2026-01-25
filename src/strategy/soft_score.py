@@ -11,6 +11,15 @@ def _bucket_dist(dist: Optional[float], levels: list[tuple[float,float]]) -> flo
             return float(sc)
     return 0.0
 
+def _bucket_min(val: Optional[float], levels: list[tuple[float,float]]) -> float:
+    if val is None:
+        return 0.0
+    score = 0.0
+    for mn, sc in levels:
+        if val >= mn:
+            score = float(sc)
+    return score
+
 class SoftScoreStrategy(Strategy):
     def __init__(self, cfg):
         p = getattr(cfg.backtest, "strategy_params", {}) or {}
@@ -33,6 +42,25 @@ class SoftScoreStrategy(Strategy):
         self.w_macd_cross = float(p.get("w_macd_cross", 1.0))
         self.w_volume_surge = float(p.get("w_volume_surge", 0.75))
         self.volume_ratio_threshold = float(p.get("volume_ratio_threshold", 1.3))
+        self.min_room_to_high_atr = float(p.get("min_room_to_high_atr", 0.75))
+        self.room_to_high_levels = p.get("room_to_high_levels", [(1.5, 0.75), (2.5, 1.5), (4.0, 2.5)])
+        self.w_momentum_20 = float(p.get("w_momentum_20", 0.75))
+        self.w_momentum_60 = float(p.get("w_momentum_60", 1.5))
+        self.w_momentum_60_negative = float(p.get("w_momentum_60_negative", -1.5))
+        self.w_ma20_slope = float(p.get("w_ma20_slope", 1.0))
+        self.ma20_slope_atr_threshold = float(p.get("ma20_slope_atr_threshold", 0.15))
+        self.atr_ratio_low = float(p.get("atr_ratio_low", 0.9))
+        self.atr_ratio_high = float(p.get("atr_ratio_high", 1.4))
+        self.w_atr_ratio_low = float(p.get("w_atr_ratio_low", 0.75))
+        self.w_atr_ratio_high = float(p.get("w_atr_ratio_high", -1.0))
+        self.ob_quality_strong = float(p.get("ob_quality_strong", 2.0))
+        self.ob_quality_min = float(p.get("ob_quality_min", 1.0))
+        self.w_ob_quality_strong = float(p.get("w_ob_quality_strong", 1.0))
+        self.w_ob_quality_weak = float(p.get("w_ob_quality_weak", -0.5))
+        self.ob_age_max = int(p.get("ob_age_max", 60))
+        self.w_ob_age_old = float(p.get("w_ob_age_old", -0.5))
+        self.fvg_age_max = int(p.get("fvg_age_max", 60))
+        self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
 
     def rank(self, date: str, symbol: str, ctx: Dict[str,Any]) -> Optional[Tuple[float,str,Dict[str,Any]]]:
         # Hard Gate
@@ -44,6 +72,10 @@ class SoftScoreStrategy(Strategy):
         ob = ctx.get("ob") or {}
         invalidation = ob.get("invalidation")
         if invalidation is None and ctx.get("atr14") is None:
+            return None
+
+        room_to_high_atr = ctx.get("room_to_high_atr")
+        if room_to_high_atr is not None and room_to_high_atr < self.min_room_to_high_atr:
             return None
 
         breakdown: Dict[str,Any] = {}
@@ -146,6 +178,68 @@ class SoftScoreStrategy(Strategy):
             breakdown["volume_surge"] = self.w_volume_surge
         else:
             breakdown["volume_surge"] = 0.0
+
+        s_room = _bucket_min(room_to_high_atr, self.room_to_high_levels)
+        score += s_room
+        breakdown["room_to_high"] = s_room
+
+        momentum_20 = ctx.get("momentum_20")
+        if momentum_20 is not None and momentum_20 > 0:
+            score += self.w_momentum_20
+            breakdown["momentum_20"] = self.w_momentum_20
+        else:
+            breakdown["momentum_20"] = 0.0
+
+        momentum_60 = ctx.get("momentum_60")
+        if momentum_60 is not None and momentum_60 > 0:
+            score += self.w_momentum_60
+            breakdown["momentum_60"] = self.w_momentum_60
+        elif momentum_60 is not None and momentum_60 < 0:
+            score += self.w_momentum_60_negative
+            breakdown["momentum_60"] = self.w_momentum_60_negative
+        else:
+            breakdown["momentum_60"] = 0.0
+
+        ma20_slope_atr = ctx.get("ma20_slope_atr")
+        if ma20_slope_atr is not None and ma20_slope_atr >= self.ma20_slope_atr_threshold:
+            score += self.w_ma20_slope
+            breakdown["ma20_slope"] = self.w_ma20_slope
+        else:
+            breakdown["ma20_slope"] = 0.0
+
+        atr_ratio = ctx.get("atr_ratio")
+        if atr_ratio is not None and atr_ratio <= self.atr_ratio_low:
+            score += self.w_atr_ratio_low
+            breakdown["atr_ratio"] = self.w_atr_ratio_low
+        elif atr_ratio is not None and atr_ratio >= self.atr_ratio_high:
+            score += self.w_atr_ratio_high
+            breakdown["atr_ratio"] = self.w_atr_ratio_high
+        else:
+            breakdown["atr_ratio"] = 0.0
+
+        ob_quality = ctx.get("ob_quality")
+        if ob_quality is not None and ob_quality >= self.ob_quality_strong:
+            score += self.w_ob_quality_strong
+            breakdown["ob_quality"] = self.w_ob_quality_strong
+        elif ob_quality is not None and ob_quality < self.ob_quality_min:
+            score += self.w_ob_quality_weak
+            breakdown["ob_quality"] = self.w_ob_quality_weak
+        else:
+            breakdown["ob_quality"] = 0.0
+
+        ob_age = ctx.get("ob_age")
+        if ob_age is not None and ob_age > self.ob_age_max:
+            score += self.w_ob_age_old
+            breakdown["ob_age"] = self.w_ob_age_old
+        else:
+            breakdown["ob_age"] = 0.0
+
+        fvg_age = ctx.get("fvg_age")
+        if fvg_age is not None and fvg_age > self.fvg_age_max:
+            score += self.w_fvg_age_old
+            breakdown["fvg_age"] = self.w_fvg_age_old
+        else:
+            breakdown["fvg_age"] = 0.0
 
         breakdown["total"] = score
         if score < self.threshold:
