@@ -77,8 +77,16 @@ def run_backtest(
     max_positions = int(cfg.backtest.max_positions)
     fee_bps = float(cfg.backtest.fee_bps)
     slippage_bps = float(cfg.backtest.slippage_bps)
-    fill_price = str(trade_rules.entry_price_mode)
-    stop_grace_days = int(getattr(cfg.backtest, "stop_grace_days", 0))
+    fill_price = str(cfg.backtest.fill_price)
+    tp_cfg = cfg.backtest.tp
+    tp_rr_target = max(0.1, float(tp_cfg.rr_target))
+    tp_partial_rr = max(0.0, float(tp_cfg.partial_rr))
+    tp_partial_size = float(tp_cfg.partial_size)
+    move_stop_to_entry = bool(tp_cfg.move_stop_to_entry)
+    tp_partial_size = max(0.0, min(tp_partial_size, 1.0))
+    if tp_partial_rr >= tp_rr_target or tp_partial_size <= 0:
+        tp_partial_rr = 0.0
+        tp_partial_size = 0.0
 
     prog = Progress(total=len(cal), label="SimDays", every=25)
     day_i = 0
@@ -138,8 +146,22 @@ def run_backtest(
                         ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
                         trade_rules.update_trailing_stop(pos, ctx)
 
-            if stop_grace_days > 0 and pos.hold_days < stop_grace_days:
-                pos.hold_days += 1
+            if low_px <= pos.stop_px:
+                to_close.append((sym, pos.stop_px, "STOP"))
+                continue
+
+            if not pos.took_partial and pos.tp1_size > 0 and high_px >= pos.tp1_px:
+                partial_closes.append((sym, pos.tp1_px, "TP1", pos.tp1_size))
+                pos.remaining_size = max(0.0, pos.remaining_size - pos.tp1_size)
+                pos.took_partial = True
+                if pos.remaining_size <= 0:
+                    positions.pop(sym, None)
+                    continue
+                if move_stop_to_entry and pos.stop_px < pos.entry_px:
+                    pos.stop_px = pos.entry_px
+
+            if pos.remaining_size > 0 and high_px >= pos.tp2_px:
+                to_close.append((sym, pos.tp2_px, "TP"))
                 continue
 
             exit_decisions = trade_rules.evaluate_exit(

@@ -101,7 +101,6 @@ class BacktestCfg(BaseModel):
     slippage_bps: float = 5
     max_positions: int = 10
     risk_per_trade: float = 0.01
-    stop_grace_days: int = 15
     class TpCfg(BaseModel):
         rr_target: float = 2.0
         partial_rr: float = 1.0
