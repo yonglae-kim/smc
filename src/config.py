@@ -58,6 +58,13 @@ class BacktestCfg(BaseModel):
     slippage_bps: float = 5
     max_positions: int = 10
     risk_per_trade: float = 0.01
+    class TpCfg(BaseModel):
+        rr_target: float = 2.0
+        partial_rr: float = 1.0
+        partial_size: float = 0.5
+        move_stop_to_entry: bool = True
+
+    tp: TpCfg = TpCfg()
     strategy: str = "ob_pullback"
     symbols: Any = "TOP500"  # "TOP500" or list[str]
     warmup_bars: int = 260

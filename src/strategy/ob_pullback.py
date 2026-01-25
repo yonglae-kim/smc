@@ -5,7 +5,7 @@ from .base import Strategy, Signal
 class OBPullbackStrategy(Strategy):
     """Example strategy for backtesting only.
     ENTER: demand OB exists, not fully mitigated, dist_to_ob_atr <= 0.3, regime tailwind, not atr spike.
-    EXIT: close < invalidation (demand) OR after hold_days (handled by engine) OR 2R TP (handled by engine).
+    EXIT: close < invalidation (demand) OR after hold_days (handled by engine) OR scaled TP (handled by engine).
     """
     def on_day(self, date: str, symbol: str, ctx: Dict[str,Any]) -> Optional[Signal]:
         ob = ctx.get("ob")
