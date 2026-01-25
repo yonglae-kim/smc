@@ -61,6 +61,8 @@ class SoftScoreStrategy(Strategy):
         self.w_ob_age_old = float(p.get("w_ob_age_old", -0.5))
         self.fvg_age_max = int(p.get("fvg_age_max", 60))
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
+        self.require_tailwind = bool(p.get("require_tailwind", False))
+        self.require_above_ma200 = bool(p.get("require_above_ma200", False))
 
     def rank(self, date: str, symbol: str, ctx: Dict[str,Any]) -> Optional[Tuple[float,str,Dict[str,Any]]]:
         # Hard Gate
@@ -96,6 +98,10 @@ class SoftScoreStrategy(Strategy):
 
         regime = (ctx.get("regime") or {})
         rtag = regime.get("tag")
+        if self.require_tailwind and rtag != "TAILWIND":
+            return None
+        if self.require_above_ma200 and not ctx.get("above_ma200"):
+            return None
         if rtag == "TAILWIND":
             score += self.w_regime_tailwind
             breakdown["regime"] = self.w_regime_tailwind
