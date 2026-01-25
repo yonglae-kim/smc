@@ -233,7 +233,23 @@ def run_backtest(
 
                 ob = ctx.get("ob") or {}
                 stop_px = float(ob.get("invalidation", entry_px * 0.95))
+                min_risk_ratio = 0.001
+                if stop_px >= entry_px:
+                    adjusted_stop = entry_px * (1 - min_risk_ratio)
+                    print(
+                        "[Backtest][Warn] stop_px >= entry_px; adjusting stop",
+                        {"symbol": sym, "entry_px": entry_px, "stop_px": stop_px, "adjusted_stop": adjusted_stop},
+                        flush=True,
+                    )
+                    stop_px = adjusted_stop
                 risk_per_share = max(1e-6, entry_px - stop_px)
+                min_risk_per_share = entry_px * min_risk_ratio
+                if risk_per_share < min_risk_per_share:
+                    print(
+                        "[Backtest][Warn] risk_per_share too small",
+                        {"symbol": sym, "entry_px": entry_px, "stop_px": stop_px, "risk_per_share": risk_per_share},
+                        flush=True,
+                    )
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
                 size = max(0.0, risk_budget / risk_per_share)
 
