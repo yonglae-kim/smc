@@ -25,7 +25,7 @@ class TradeSignal:
 @dataclass
 class EntryPlan:
     entry_type: str
-    entry_type_label: str = ""
+    entry_type_label: str
     entry_price: float
     stop_loss: float
     take_profit: float
