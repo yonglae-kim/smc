@@ -57,6 +57,11 @@ backtest:
   slippage_bps: 5
   max_positions: 10
   risk_per_trade: 0.01
+  tp:
+    rr_target: 2.0
+    partial_rr: 1.0
+    partial_size: 0.5
+    move_stop_to_entry: true
   strategy: ob_pullback
   symbols: ["005930","000660","035420","051910","035720"] # TOP500
 #  symbols: TOP500

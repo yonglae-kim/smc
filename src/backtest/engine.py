@@ -19,8 +19,12 @@ class Position:
     entry_date: str
     entry_px: float
     size: float
+    remaining_size: float
     stop_px: float
-    tp_px: float
+    tp1_px: float
+    tp2_px: float
+    tp1_size: float
+    took_partial: bool = False
     hold: int = 0
     reason: str = ""
     entry_score: float = 0.0
@@ -90,6 +94,15 @@ def run_backtest(
     fee_bps = float(cfg.backtest.fee_bps)
     slippage_bps = float(cfg.backtest.slippage_bps)
     fill_price = str(cfg.backtest.fill_price)
+    tp_cfg = cfg.backtest.tp
+    tp_rr_target = max(0.1, float(tp_cfg.rr_target))
+    tp_partial_rr = max(0.0, float(tp_cfg.partial_rr))
+    tp_partial_size = float(tp_cfg.partial_size)
+    move_stop_to_entry = bool(tp_cfg.move_stop_to_entry)
+    tp_partial_size = max(0.0, min(tp_partial_size, 1.0))
+    if tp_partial_rr >= tp_rr_target or tp_partial_size <= 0:
+        tp_partial_rr = 0.0
+        tp_partial_size = 0.0
 
     prog = Progress(total=len(cal), label="SimDays", every=25)
     day_i = 0
@@ -112,6 +125,7 @@ def run_backtest(
 
         # exits
         to_close = []
+        partial_closes = []
         for sym, pos in list(positions.items()):
             df = ohlcv_map.get(sym)
             if df is None or len(df) == 0:
@@ -131,20 +145,31 @@ def run_backtest(
             if low_px <= pos.stop_px:
                 to_close.append((sym, pos.stop_px, "STOP"))
                 continue
-            if high_px >= pos.tp_px:
-                to_close.append((sym, pos.tp_px, "TP"))
+
+            if not pos.took_partial and pos.tp1_size > 0 and high_px >= pos.tp1_px:
+                partial_closes.append((sym, pos.tp1_px, "TP1", pos.tp1_size))
+                pos.remaining_size = max(0.0, pos.remaining_size - pos.tp1_size)
+                pos.took_partial = True
+                if pos.remaining_size <= 0:
+                    positions.pop(sym, None)
+                    continue
+                if move_stop_to_entry and pos.stop_px < pos.entry_px:
+                    pos.stop_px = pos.entry_px
+
+            if pos.remaining_size > 0 and high_px >= pos.tp2_px:
+                to_close.append((sym, pos.tp2_px, "TP"))
                 continue
 
             pos.hold += 1
             if pos.hold >= 20:
                 to_close.append((sym, close_px, "TIME"))
 
-        for sym, exit_px, why in to_close:
-            pos = positions.pop(sym, None)
+        for sym, exit_px, why, size_to_close in partial_closes:
+            pos = positions.get(sym)
             if pos is None:
                 continue
             exit_px_costed = exit_px * (1.0 - (fee_bps + slippage_bps) / 10000.0)
-            pnl = (exit_px_costed - pos.entry_px) * pos.size
+            pnl = (exit_px_costed - pos.entry_px) * size_to_close
             equity += pnl
             trades.append(
                 {
@@ -154,7 +179,35 @@ def run_backtest(
                     "exit_date": date_str,
                     "entry_px": pos.entry_px,
                     "exit_px": exit_px_costed,
-                    "size": pos.size,
+                    "size": size_to_close,
+                    "pnl": pnl,
+                    "exit_reason": why,
+                    "entry_reason": pos.reason,
+                    "entry_score": pos.entry_score,
+                    "entry_breakdown": pos.entry_breakdown or {},
+                }
+            )
+            stats["exited"] += 1
+
+        for sym, exit_px, why in to_close:
+            pos = positions.pop(sym, None)
+            if pos is None:
+                continue
+            size_to_close = pos.remaining_size if pos.remaining_size > 0 else 0.0
+            if size_to_close <= 0:
+                continue
+            exit_px_costed = exit_px * (1.0 - (fee_bps + slippage_bps) / 10000.0)
+            pnl = (exit_px_costed - pos.entry_px) * size_to_close
+            equity += pnl
+            trades.append(
+                {
+                    "symbol": sym,
+                    "name": pos.name,
+                    "entry_date": pos.entry_date,
+                    "exit_date": date_str,
+                    "entry_px": pos.entry_px,
+                    "exit_px": exit_px_costed,
+                    "size": size_to_close,
                     "pnl": pnl,
                     "exit_reason": why,
                     "entry_reason": pos.reason,
@@ -256,7 +309,12 @@ def run_backtest(
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
                 size = max(0.0, risk_budget / risk_per_share)
 
-                tp_px = entry_px + 2.0 * risk_per_share
+                tp2_px = entry_px + tp_rr_target * risk_per_share
+                tp1_px = tp2_px
+                tp1_size = 0.0
+                if tp_partial_size > 0:
+                    tp1_px = entry_px + tp_partial_rr * risk_per_share
+                    tp1_size = size * tp_partial_size
                 entry_px_costed = _apply_cost(entry_px, fee_bps, slippage_bps)
 
                 positions[sym] = Position(
@@ -265,8 +323,11 @@ def run_backtest(
                     entry_date=str(entry_dt.date()),
                     entry_px=entry_px_costed,
                     size=size,
+                    remaining_size=size,
                     stop_px=stop_px,
-                    tp_px=tp_px,
+                    tp1_px=tp1_px,
+                    tp2_px=tp2_px,
+                    tp1_size=tp1_size,
                     reason=reason,
                     entry_score=float(s),
                     entry_breakdown=breakdown,
