@@ -286,6 +286,7 @@ def run_backtest(
                     if d.empty:
                         continue
                     entry_px = float(d["close"].iloc[0])
+                entry_plan = trade_rules.build_entry_plan(ctx, entry_px)
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
                 risk_per_share = max(1e-6, entry_px - entry_plan.stop_loss)
                 size = max(0.0, risk_budget / risk_per_share)
