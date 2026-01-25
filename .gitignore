@@ -11,3 +11,7 @@ __pycache__/
 .env
 .venv/
 venv/
+
+# Runtime artifacts
+cache/
+out/
