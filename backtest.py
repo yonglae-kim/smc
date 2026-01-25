@@ -1,4 +1,5 @@
 import argparse, os
+import json
 from src.config import load_config
 from src.utils.http import HttpClient
 from src.providers.naver import NaverChartProvider, NaverMarketSumFetcher
@@ -61,20 +62,49 @@ def main():
         done += 1
         prog.tick(done, extra=f"last={sym} rows={(0 if df is None else len(df))}")
 
-    print("[Backtest] Running simulation", flush=True)
-    strat = SoftScoreStrategy(cfg)
-    result = run_backtest(universe, ohlcv_map, idx_kospi, idx_kosdaq, cfg, strat)
-    metrics = compute_metrics(result)
-
     run_id = f"{cfg.backtest.strategy}_{cfg.backtest.start}_{cfg.backtest.end}"
     out_dir = os.path.join(cfg.app.out_dir, "backtests", run_id)
     os.makedirs(out_dir, exist_ok=True)
 
-    with open(os.path.join(out_dir, "result.json"), "w", encoding="utf-8") as f:
-        import json
+    last_state = {"equity": None, "trades": None, "positions": None}
+    result_path = os.path.join(out_dir, "result.json")
+
+    def on_update(partial_result, update_meta):
+        with open(result_path, "w", encoding="utf-8") as f:
+            json.dump(partial_result, f, ensure_ascii=False, indent=2)
+
+        changed = (
+            last_state["equity"] != update_meta["equity"]
+            or last_state["trades"] != update_meta["trades"]
+            or last_state["positions"] != update_meta["positions"]
+        )
+        if changed:
+            print(
+                "[Backtest][Update]",
+                {
+                    "date": update_meta["date"],
+                    "equity": round(update_meta["equity"], 2),
+                    "positions": update_meta["positions"],
+                    "trades": update_meta["trades"],
+                },
+                flush=True,
+            )
+            last_state.update(
+                {
+                    "equity": update_meta["equity"],
+                    "trades": update_meta["trades"],
+                    "positions": update_meta["positions"],
+                }
+            )
+
+    print("[Backtest] Running simulation", flush=True)
+    strat = SoftScoreStrategy(cfg)
+    result = run_backtest(universe, ohlcv_map, idx_kospi, idx_kosdaq, cfg, strat, on_update=on_update)
+    metrics = compute_metrics(result)
+
+    with open(result_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     with open(os.path.join(out_dir, "metrics.json"), "w", encoding="utf-8") as f:
-        import json
         json.dump(metrics, f, ensure_ascii=False, indent=2)
 
     render_backtest_report(os.path.join(out_dir, "report.html"), {

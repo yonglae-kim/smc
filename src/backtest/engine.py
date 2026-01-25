@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Callable
 
 import pandas as pd
 
@@ -38,6 +38,7 @@ def run_backtest(
     idx_kosdaq: pd.DataFrame,
     cfg,
     strategy: Strategy,
+    on_update: Optional[Callable[[Dict[str, Any], Dict[str, Any]], None]] = None,
 ) -> Dict[str, Any]:
     start = pd.to_datetime(cfg.backtest.start)
     end = pd.to_datetime(cfg.backtest.end)
@@ -273,6 +274,23 @@ def run_backtest(
                 stats["entered"] += 1
 
         equity_curve.append({"date": date_str, "equity": equity, "positions": len(positions)})
+        if on_update is not None:
+            on_update(
+                {
+                    "start": str(start.date()),
+                    "end": str(end.date()),
+                    "equity_start": 1_000_000.0,
+                    "equity_end": equity,
+                    "trades": trades,
+                    "equity_curve": equity_curve,
+                },
+                {
+                    "date": date_str,
+                    "equity": equity,
+                    "positions": len(positions),
+                    "trades": len(trades),
+                },
+            )
 
         if day_i % 50 == 0:
             print("[Backtest][Stats]", stats, flush=True)
