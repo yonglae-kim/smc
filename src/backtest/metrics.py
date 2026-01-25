@@ -9,6 +9,10 @@ def compute_metrics(result: Dict[str,Any]) -> Dict[str,Any]:
         "mdd": None,
         "sharpe": None,
         "winrate": None,
+        "avg_win": None,
+        "avg_loss": None,
+        "expectancy": None,
+        "profit_factor": None,
     }
 
     curve = result.get("equity_curve", []) or []
@@ -32,6 +36,13 @@ def compute_metrics(result: Dict[str,Any]) -> Dict[str,Any]:
     if trades:
         pnl = np.array([t.get("pnl", 0.0) for t in trades], dtype=float)
         if len(pnl) > 0:
+            wins = pnl[pnl > 0]
+            losses = pnl[pnl < 0]
             metrics["winrate"] = float((pnl > 0).mean())
+            metrics["avg_win"] = float(wins.mean()) if len(wins) > 0 else 0.0
+            metrics["avg_loss"] = float(losses.mean()) if len(losses) > 0 else 0.0
+            metrics["expectancy"] = float(metrics["winrate"] * metrics["avg_win"] + (1 - metrics["winrate"]) * metrics["avg_loss"])
+            loss_sum = float(losses.sum())
+            metrics["profit_factor"] = float(wins.sum() / abs(loss_sum)) if loss_sum != 0 else None
 
     return metrics

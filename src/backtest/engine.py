@@ -11,6 +11,7 @@ from ..strategy.base import Strategy
 from ..trading.models import Position
 from ..trading.rules import TradeRules
 from ..utils.progress import Progress
+from ..utils.rank import assign_percentile_rank
 
 
 def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
@@ -219,6 +220,7 @@ def run_backtest(
         # entries
         if len(positions) < max_positions:
             day_candidates = []
+            day_contexts = []
 
             for meta in symbols_meta:
                 sym = meta["symbol"]
@@ -258,7 +260,18 @@ def run_backtest(
                     else {"tag": "UNKNOWN", "ma200": None, "rsi": None, "atr_spike": None}
                 )
                 ctx = score_candidate(ctx, cfg.scoring.weights)
+                day_contexts.append({"sym": sym, "ctx": ctx, "df_full": df_full, "meta": meta})
 
+            assign_percentile_rank(
+                [item["ctx"] for item in day_contexts],
+                lambda c: (c.get("rs") or {}).get("diff"),
+                "rs_rank_pct",
+            )
+            for item in day_contexts:
+                sym = item["sym"]
+                ctx = item["ctx"]
+                df_full = item["df_full"]
+                meta = item["meta"]
                 signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.get("close", 0.0)))
                 if not trade_rules.signal_passes(signal):
                     stats["strategy_exclude"] += 1

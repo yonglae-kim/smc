@@ -69,9 +69,9 @@ trade:
   execution_delay_days: 1
   entry_price_mode: next_open
   force_top_k: 0
-  min_score: 4.0
-  min_expected_return: 0.02
-  min_rr: 1.5
+  min_score: 3.0
+  min_expected_return: 0.01
+  min_rr: 1.2
   min_risk_ratio: 0.001
   stop_atr_mult: 1.5
   tp_rr_target: 2.0
@@ -84,19 +84,19 @@ trade:
   exit_on_score_drop: true
   tp_sl_conflict: conservative
   trail_atr_mult: 0.0
-  enable_trend_filter: true
+  enable_trend_filter: false
   trend_ma_stack: true
-  trend_slope_atr_min: 0.1
-  enable_volatility_filter: true
-  max_atr_pct: 0.05
-  max_atr_ratio: 1.6
-  enable_volume_confirm: true
-  min_volume_ratio: 1.5
-  enable_rs_rank: true
-  rs_rank_min_pct: 0.7
-  enable_bb_squeeze_breakout: true
-  bb_squeeze_max_width: 0.08
-  min_confirmations: 2
+  trend_slope_atr_min: 0.0
+  enable_volatility_filter: false
+  max_atr_pct: 0.08
+  max_atr_ratio: 2.2
+  enable_volume_confirm: false
+  min_volume_ratio: 1.2
+  enable_rs_rank: false
+  rs_rank_min_pct: 0.5
+  enable_bb_squeeze_breakout: false
+  bb_squeeze_max_width: 0.12
+  min_confirmations: 0
 backtest:
   start: '2025-01-01'
   end: '2025-12-31'
@@ -107,7 +107,7 @@ backtest:
   risk_per_trade: 0.01
   stop_grace_days: 15
   strategy_params:
-    threshold: 4.0
+    threshold: 3.0
     min_room_to_high_atr: 0.75
     room_to_high_levels: [[1.5, 0.75], [2.5, 1.5], [4.0, 2.5]]
     w_momentum_20: 0.75
@@ -127,14 +127,14 @@ backtest:
     w_ob_age_old: -0.5
     fvg_age_max: 60
     w_fvg_age_old: -0.5
-    require_tailwind: true
-    require_above_ma200: true
+    require_tailwind: false
+    require_above_ma200: false
   tp:
     rr_target: 2.0
     partial_rr: 1.0
     partial_size: 0.5
     move_stop_to_entry: true
-  strategy: tight_winrate
+  strategy: baseline
   symbols: ["005930","000660","035420","051910","035720"] # TOP500
 #  symbols: TOP500
   warmup_bars: 260
