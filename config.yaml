@@ -34,7 +34,13 @@ scoring:
     fvg_near: 7
     ob_fvg_confluence: 6
     above_ma200: 6
+    above_ma20: 4
+    ma20_above_ma200: 5
     rsi_neutral: 4
+    rsi_bullish: 5
+    macd_bullish: 5
+    macd_cross: 3
+    volume_surge: 4
     rs_strong: 6
     regime_tailwind: 6
     regime_headwind: -8
