@@ -66,26 +66,26 @@ class TradeRules:
             upper = float(ob.get("upper", close_px))
             mid = (lower + upper) / 2.0
             if close_px > upper:
-                rationale.append("Price above OB; pullback limit near OB upper.")
+                rationale.append("가격이 OB 상단 위에 있어, OB 상단 부근 되돌림 지정가로 접근.")
                 return "limit_pullback", upper, rationale
             if lower <= close_px <= upper:
-                rationale.append("Price inside OB; limit near zone midpoint.")
+                rationale.append("가격이 OB 구간 내부에 있어, 구간 중앙값 근처 지정가로 접근.")
                 return "limit_in_zone", mid, rationale
-            rationale.append("Price below OB; reclaim needed before entry.")
+            rationale.append("가격이 OB 하단 아래라, OB 리클레임 확인 후 진입 권장.")
             return "reclaim", lower, rationale
         if fvg:
             lower = float(fvg.get("lower", close_px))
             upper = float(fvg.get("upper", close_px))
             mid = (lower + upper) / 2.0
             if close_px > upper:
-                rationale.append("Price above FVG; pullback limit near FVG upper.")
+                rationale.append("가격이 FVG 상단 위에 있어, FVG 상단 되돌림 지정가로 접근.")
                 return "limit_pullback", upper, rationale
             if lower <= close_px <= upper:
-                rationale.append("Price inside FVG; limit near zone midpoint.")
+                rationale.append("가격이 FVG 구간 내부에 있어, 구간 중앙값 근처 지정가로 접근.")
                 return "limit_in_zone", mid, rationale
-            rationale.append("Price below FVG; reclaim needed before entry.")
+            rationale.append("가격이 FVG 하단 아래라, FVG 리클레임 확인 후 진입 권장.")
             return "reclaim", lower, rationale
-        rationale.append("No zone; use next open entry.")
+        rationale.append("명확한 구간이 없어 다음 시가 진입 전략 적용.")
         return "next_open", close_px, rationale
 
     def build_entry_plan(self, ctx: Dict[str, Any], entry_price: float) -> EntryPlan:
@@ -102,11 +102,18 @@ class TradeRules:
         take_profit = entry_px + self.rr_target * risk_per_share
         rr = (take_profit - entry_px) / risk_per_share if risk_per_share > 0 else 0.0
         expected_return = (take_profit - entry_px) / max(entry_px, 1e-6)
-        invalidation = "Close below stop loss or structure breaks."
+        invalidation = "종가가 손절가 하회 또는 구조 붕괴 시 시나리오 무효."
         if ob:
-            invalidation = f"Close below OB invalidation {stop_loss:.0f}."
+            invalidation = f"종가가 OB 무효화 가격({stop_loss:.0f}) 하회 시 시나리오 무효."
+        entry_type_label_map = {
+            "limit_pullback": "되돌림 지정가",
+            "limit_in_zone": "구간 내부 지정가",
+            "reclaim": "리클레임 확인 진입",
+            "next_open": "다음 시가 진입",
+        }
         return EntryPlan(
             entry_type=entry_type,
+            entry_type_label=entry_type_label_map.get(entry_type, entry_type),
             entry_price=float(entry_px),
             stop_loss=float(stop_loss),
             take_profit=float(take_profit),
@@ -233,40 +240,65 @@ class TradeRules:
 
         if stop_hit and tp_hit:
             if self.tp_sl_conflict == "optimistic":
-                decisions.append(ExitDecision(action="EXIT", reason="TP/SL same-day (optimistic TP)", price=position.take_profit))
+                decisions.append(
+                    ExitDecision(
+                        action="EXIT",
+                        reason="TP/SL 동시 터치: TP 우선(낙관적)",
+                        price=position.take_profit,
+                    )
+                )
                 return decisions
-            decisions.append(ExitDecision(action="EXIT", reason="TP/SL same-day (conservative SL)", price=position.stop_loss))
+            decisions.append(
+                ExitDecision(
+                    action="EXIT",
+                    reason="TP/SL 동시 터치: SL 우선(보수적)",
+                    price=position.stop_loss,
+                )
+            )
             return decisions
 
         if stop_hit:
-            decisions.append(ExitDecision(action="EXIT", reason="Stop loss hit", price=position.stop_loss))
+            decisions.append(ExitDecision(action="EXIT", reason="손절가 도달(Stop Loss)", price=position.stop_loss))
             return decisions
 
         if position.tp1_price and not position.took_partial and high_px >= position.tp1_price:
-            decisions.append(ExitDecision(action="PARTIAL", reason="Partial take profit", price=position.tp1_price, size=position.tp1_size))
+            decisions.append(
+                ExitDecision(
+                    action="PARTIAL",
+                    reason="1차 목표가 부분 청산",
+                    price=position.tp1_price,
+                    size=position.tp1_size,
+                )
+            )
 
         if tp_hit:
-            decisions.append(ExitDecision(action="EXIT", reason="Take profit hit", price=position.take_profit))
+            decisions.append(ExitDecision(action="EXIT", reason="목표가 도달(전량 익절)", price=position.take_profit))
             return decisions
 
         if position.hold_days >= self.max_hold_days:
-            decisions.append(ExitDecision(action="EXIT", reason="Time stop", price=close_px))
+            decisions.append(ExitDecision(action="EXIT", reason=f"보유기간 만료({self.max_hold_days}일)", price=close_px))
             return decisions
 
         if ctx is not None:
             if self.exit_on_structure_break:
                 bos_dir = (ctx.get("bos") or {}).get("direction")
                 if ctx.get("structure_bias") == "BEAR" or bos_dir == "DOWN":
-                    decisions.append(ExitDecision(action="EXIT", reason="Structure break", price=close_px))
+                    decisions.append(ExitDecision(action="EXIT", reason="구조 붕괴/하락 전환(BOS)", price=close_px))
                     return decisions
 
             if self.exit_on_score_drop:
                 score = float(ctx.get("soft_score", ctx.get("score", 0.0)))
                 if score < self.score_exit_threshold:
-                    decisions.append(ExitDecision(action="EXIT", reason="Score deteriorated", price=close_px))
+                    decisions.append(
+                        ExitDecision(
+                            action="EXIT",
+                            reason=f"점수 하락(임계 {self.score_exit_threshold:.2f} 미만)",
+                            price=close_px,
+                        )
+                    )
                     return decisions
 
-        decisions.append(ExitDecision(action="HOLD", reason="Hold"))
+        decisions.append(ExitDecision(action="HOLD", reason="보유 유지"))
         return decisions
 
     def _build_buy_reasons(
@@ -278,18 +310,29 @@ class TradeRules:
     ) -> List[str]:
         reasons = []
         if not all_pass:
-            reasons.append("Signal failed one or more gates; see gate table for details.")
+            reasons.append("게이트 조건 일부 미달(상세는 게이트 표 참고).")
         if ctx.get("structure_bias") == "BULL":
-            reasons.append("Structure bias is bullish (HH/HL sequence).")
+            reasons.append("구조 바이어스: 상승(HH/HL 구조).")
         if ctx.get("tag_confluence_ob_fvg"):
-            reasons.append("OB/FVG confluence adds quality to the zone.")
+            reasons.append("OB/FVG 컨플루언스 구간으로 신뢰도 가점.")
         rs_tag = (ctx.get("rs") or {}).get("tag")
         if rs_tag == "RS_STRONG":
-            reasons.append("Relative strength is strong vs index.")
+            reasons.append("상대강도 우수(지수 대비 강세).")
         regime_tag = (ctx.get("regime") or {}).get("tag")
         if regime_tag == "TAILWIND":
-            reasons.append("Market regime tailwind.")
-        reasons.append(f"Entry plan: {entry_plan.entry_type} with RR {entry_plan.rr:.2f}.")
+            reasons.append("시장 레짐 우호(상승/완만 변동성 구간).")
+        entry_type_map = {
+            "limit_pullback": "되돌림 지정가",
+            "limit_in_zone": "구간 내부 지정가",
+            "reclaim": "리클레임 확인 진입",
+            "next_open": "다음 시가 진입",
+        }
+        entry_type_label = entry_type_map.get(entry_plan.entry_type, entry_plan.entry_type)
+        reasons.append(
+            "진입 계획: "
+            f"{entry_type_label} · RR {entry_plan.rr:.2f} · "
+            f"손절 {entry_plan.stop_loss:.0f} · 목표 {entry_plan.take_profit:.0f}."
+        )
         return reasons
 
     def build_sell_reasons(self, exit_decisions: List[ExitDecision], position: Position, ctx: Dict[str, Any]) -> List[str]:
@@ -298,12 +341,14 @@ class TradeRules:
             if d.action == "EXIT":
                 reasons.append(d.reason)
         if ctx.get("structure_bias") == "BEAR":
-            reasons.append("Structure bias turned bearish.")
+            reasons.append("구조 바이어스 약세 전환.")
         score_val = ctx.get("soft_score", ctx.get("score"))
         if score_val is not None:
-            reasons.append(f"Current soft score {float(score_val):.2f}.")
+            reasons.append(f"현재 소프트 점수 {float(score_val):.2f}.")
         if position.exit_rules.get("tp_sl_conflict"):
-            reasons.append(f"TP/SL conflict rule: {position.exit_rules['tp_sl_conflict']}.")
+            conflict_map = {"optimistic": "낙관적(TP 우선)", "conservative": "보수적(SL 우선)"}
+            conflict_label = conflict_map.get(position.exit_rules["tp_sl_conflict"], position.exit_rules["tp_sl_conflict"])
+            reasons.append(f"TP/SL 동시 터치 기준: {conflict_label}.")
         return reasons
 
     def describe_score_breakdown(self, breakdown: Dict[str, float]) -> List[str]:

@@ -244,9 +244,9 @@ def run(config_path: str) -> None:
         pnl_pct = (last_price - pos.entry_price) / max(pos.entry_price, 1e-6) * 100.0
         risk_pct = (last_price - pos.stop_loss) / max(last_price, 1e-6) * 100.0
         exit_action = next((d for d in exit_decisions if d.action == "EXIT"), None)
-        next_action = "HOLD"
+        next_action = "보유"
         if exit_action:
-            next_action = "EXIT"
+            next_action = "청산"
             pending_exits.append(
                 {
                     "symbol": pos.symbol,
@@ -378,8 +378,8 @@ def run(config_path: str) -> None:
         c["score_text"] = "\n".join(
             trade_rules.describe_score_breakdown(row["signal"].score_breakdown)
         ) if row["signal"].score_breakdown else "(no components)"
-        c["gate_text"] = "\n".join([f"{k}: {'PASS' if v else 'FAIL'}" for k, v in row["signal"].gates.items()])
-        plan_reasons = row["entry_plan"].rationale + [f"Invalidation: {row['entry_plan'].invalidation}"]
+        c["gate_text"] = "\n".join([f"{k}: {'통과' if v else '실패'}" for k, v in row["signal"].gates.items()])
+        plan_reasons = row["entry_plan"].rationale + [f"무효화 조건: {row['entry_plan'].invalidation}"]
         all_reasons = list(row["signal"].reasons) + plan_reasons
         c["reason_text"] = "\n".join(all_reasons) if all_reasons else "(no reasons)"
         buy_details.append(c)
