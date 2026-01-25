@@ -1,0 +1,7 @@
+[Unit]
+Description=KQuant SMC Daily Reporter
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/kquant_smc_reporter
+ExecStart=/opt/kquant_smc_reporter/.venv/bin/python /opt/kquant_smc_reporter/main.py --config /opt/kquant_smc_reporter/config.yaml

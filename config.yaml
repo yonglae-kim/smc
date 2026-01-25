@@ -1,0 +1,64 @@
+app:
+  out_dir: ./out
+  cache_dir: ./cache
+  log_level: INFO
+network:
+  timeout_sec: 12
+  max_retries: 4
+  backoff_base_sec: 0.6
+  jitter_sec: 0.35
+  rate_limit_per_sec: 4.0
+universe:
+  ohlcv_lookback_days: 120
+  liquidity_window: 20
+  top_liquidity: 500
+  daily_recalc_top: 800
+  weekly_full_scan_weekday: 0
+  include_daily_value_rank_addon: 200
+analysis:
+  fractal_n: 4
+  atr_period: 14
+  rsi_period: 14
+  ma_fast: 20
+  ma_slow: 200
+  bos_buffer_atr: 0.2
+  fvg_min_width_atr: 0.3
+  ob_min_push_atr: 1.5
+  max_zone_age_bars: 120
+scoring:
+  weights:
+    structure_bull: 12
+    structure_bear: 10
+    bos_recent: 8
+    ob_near: 10
+    fvg_near: 7
+    ob_fvg_confluence: 6
+    above_ma200: 6
+    rsi_neutral: 4
+    rs_strong: 6
+    regime_tailwind: 6
+    regime_headwind: -8
+    atr_spike_risk: -6
+  top_detail: 50
+regime:
+  index_lookback_days: 260
+  rs_lookback_days: 60
+  atr_spike_mult: 1.8
+report:
+  title: KOSPI+KOSDAQ Daily Candidates (SMC Context)
+  max_table_rows: 500
+  chart_lookback: 180
+  include_sort_search_js: true
+backtest:
+  start: '2025-01-01'
+  end: '2025-12-31'
+  fill_price: next_open
+  fee_bps: 8
+  slippage_bps: 5
+  max_positions: 10
+  risk_per_trade: 0.01
+  strategy: ob_pullback
+  symbols: ["005930","000660","035420","051910","035720"] # TOP500
+#  symbols: TOP500
+  warmup_bars: 260
+  max_fetch_count: 6000

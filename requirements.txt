@@ -1,0 +1,10 @@
+beautifulsoup4
+jinja2
+lxml
+matplotlib
+numpy
+pandas
+pydantic
+python-dateutil
+requests
+pyyaml
