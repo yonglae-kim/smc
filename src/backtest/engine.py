@@ -15,6 +15,7 @@ from ..utils.progress import Progress
 @dataclass
 class Position:
     symbol: str
+    name: str
     entry_date: str
     entry_px: float
     size: float
@@ -147,6 +148,7 @@ def run_backtest(
             trades.append(
                 {
                     "symbol": sym,
+                    "name": pos.name,
                     "entry_date": pos.entry_date,
                     "exit_date": date_str,
                     "entry_px": pos.entry_px,
@@ -210,14 +212,14 @@ def run_backtest(
                     continue
 
                 s, reason, breakdown = ranked
-                day_candidates.append((float(s), sym, ctx, df_full, reason, breakdown))
+                day_candidates.append((float(s), sym, ctx, df_full, reason, breakdown, meta.get("name", "")))
 
             stats["candidates"] += len(day_candidates)
 
             day_candidates.sort(key=lambda x: x[0], reverse=True)
             slots = max_positions - len(positions)
 
-            for s, sym, ctx, df_full, reason, breakdown in day_candidates[:slots]:
+            for s, sym, ctx, df_full, reason, breakdown, name in day_candidates[:slots]:
                 entry_dt = dt
                 if fill_price == "next_open":
                     df_after = df_full[df_full["date"] > dt].head(1)
@@ -258,6 +260,7 @@ def run_backtest(
 
                 positions[sym] = Position(
                     symbol=sym,
+                    name=name,
                     entry_date=str(entry_dt.date()),
                     entry_px=entry_px_costed,
                     size=size,
