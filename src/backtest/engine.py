@@ -287,8 +287,14 @@ def run_backtest(
                         continue
                     entry_px = float(d["close"].iloc[0])
                 entry_plan = trade_rules.build_entry_plan(ctx, entry_px)
+                if entry_px <= 0 or not pd.notna(entry_px):
+                    continue
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
-                risk_per_share = max(1e-6, entry_px - entry_plan.stop_loss)
+                risk_per_share = entry_px - entry_plan.stop_loss
+                if not pd.notna(risk_per_share) or risk_per_share <= 0:
+                    risk_per_share = entry_px * float(trade_rules.min_risk_ratio)
+                if risk_per_share <= 0:
+                    continue
                 size = max(0.0, risk_budget / risk_per_share)
                 entry_px_costed = _apply_cost(entry_px, fee_bps, slippage_bps)
 
