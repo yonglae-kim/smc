@@ -31,11 +31,11 @@ th{background:#fafafa}
 <div class="card">
   <h2>Trades</h2>
   <table>
-    <thead><tr><th>Symbol</th><th>Entry</th><th>Exit</th><th>EntryPx</th><th>ExitPx</th><th>PnL</th><th>ExitReason</th><th>EntryScore</th><th>EntryReason</th></tr></thead>
+    <thead><tr><th>Symbol / Name</th><th>Entry</th><th>Exit</th><th>EntryPx</th><th>ExitPx</th><th>PnL</th><th>ExitReason</th><th>EntryScore</th><th>EntryReason</th></tr></thead>
     <tbody>
     {% for t in trades %}
       <tr>
-        <td>{{ t.symbol }}</td><td>{{ t.entry_date }}</td><td>{{ t.exit_date }}</td>
+        <td>{{ t.symbol }} {{ t.get("name", "") }}</td><td>{{ t.entry_date }}</td><td>{{ t.exit_date }}</td>
         <td>{{ "%.2f"|format(t.entry_px) }}</td><td>{{ "%.2f"|format(t.exit_px) }}</td>
         <td>{{ "%.0f"|format(t.pnl) }}</td><td>{{ t.exit_reason }}</td><td>{{ "%.1f"|format(t.get('entry_score', 0)) }}</td><td>{{ t.entry_reason }}</td>
       </tr>
