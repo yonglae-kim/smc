@@ -15,18 +15,30 @@ from .regime.regime import compute_regime
 from .scoring import score_candidate
 from .reporting.charts import plot_symbol_chart
 from .reporting.html import render_report
+from .strategy.soft_score import SoftScoreStrategy
+from .trading.models import EntryPlan, Position, TradeSignal
+from .trading.rules import TradeRules
 
 def run(config_path: str) -> None:
     cfg = load_config(config_path)
+    ymd = today_kst().strftime("%Y-%m-%d")
     os.makedirs(cfg.app.cache_dir, exist_ok=True)
     os.makedirs(cfg.app.out_dir, exist_ok=True)
+    strategy = SoftScoreStrategy(cfg)
+    trade_rules = TradeRules(cfg, strategy=strategy)
 
+    cache_mode = cfg.network.cache_mode
+    snapshot_id = cfg.network.cache_snapshot_id or ymd
+    cache_dir = os.path.join(cfg.app.cache_dir, "http", snapshot_id if cache_mode == "snapshot" else "latest")
+    from .utils.http_cache import HttpCache
+    http_cache = HttpCache(cache_dir, ttl_sec=cfg.network.cache_ttl_sec, mode=cache_mode)
     http = HttpClient(
         timeout_sec=cfg.network.timeout_sec,
         max_retries=cfg.network.max_retries,
         backoff_base_sec=cfg.network.backoff_base_sec,
         jitter_sec=cfg.network.jitter_sec,
         rate_limit_per_sec=cfg.network.rate_limit_per_sec,
+        cache=http_cache,
     )
     storage = FSStorage(cfg.app.cache_dir)
     provider = NaverChartProvider(http)
@@ -40,6 +52,12 @@ def run(config_path: str) -> None:
     idx_kosdaq = provider.get_index_ohlc("KOSDAQ", count=int(cfg.regime.index_lookback_days))
     regime_kospi = compute_regime(idx_kospi, cfg)
     regime_kosdaq = compute_regime(idx_kosdaq, cfg)
+    idx_dates = set()
+    if idx_kospi is not None and len(idx_kospi) > 0:
+        idx_dates |= set(idx_kospi["date"])
+    if idx_kosdaq is not None and len(idx_kosdaq) > 0:
+        idx_dates |= set(idx_kosdaq["date"])
+    cal = sorted(idx_dates)
 
     print(f"[Runner] Universe build: Top{cfg.universe.top_liquidity} (incremental/weekly policy)", flush=True)
 
@@ -50,8 +68,6 @@ def run(config_path: str) -> None:
     print("[Runner] Per-symbol analysis (Top500)", flush=True)
 
     # --- per-symbol analysis (resume capable) ---
-    ymd = today_kst().strftime("%Y-%m-%d")
-    snap_dir = storage.snapshot_dir(ymd)
     out_dir = storage.out_dir(cfg.app.out_dir, ymd)
 
     # resume state for analysis
@@ -109,22 +125,241 @@ def run(config_path: str) -> None:
     storage.save_json(f"state/analysis_progress_{ymd}.json", {"done": sorted(list(done))})
 
     # Rank (candidates are still within top500 universe)
-    rows_sorted = sorted(rows, key=lambda x: x.get("score", 0), reverse=True)
+    rows_sorted = sorted(rows, key=lambda x: (-x.get("score", 0), x.get("symbol", "")))
+
+    signal_rows = []
+    for ctx in rows_sorted:
+        signal, entry_plan = trade_rules.build_signal(ctx["asof"], ctx, cal, entry_price=float(ctx.get("close", 0.0)))
+        ctx["soft_score"] = signal.score
+        ctx["soft_score_breakdown"] = signal.score_breakdown
+        signal_rows.append({"ctx": ctx, "signal": signal, "entry_plan": entry_plan})
 
     # snapshot
     storage.save_json(f"snapshots/{ymd}/universe.json", uni_meta)
     storage.save_json(f"snapshots/{ymd}/candidates.json", rows_sorted)
     storage.save_json(f"snapshots/{ymd}/regime.json", {"KOSPI": regime_kospi, "KOSDAQ": regime_kosdaq})
+    storage.save_json(
+        f"snapshots/{ymd}/signals.json",
+        [
+            {
+                "symbol": s["ctx"]["symbol"],
+                "signal": s["signal"].to_dict(),
+                "entry_plan": s["entry_plan"].to_dict(),
+            }
+            for s in signal_rows
+        ],
+    )
 
     print(f"[Runner] Ranking {len(rows_sorted)} analyzed rows and generating HTML report", flush=True)
 
     # --- report build ---
+    table_rows=[]
+    for rank, c in enumerate(rows_sorted[: int(cfg.report.max_table_rows)], start=1):
+        levels=[]
+        if c.get("ob"):
+            levels.append(f"OB[{c['ob']['lower']:.0f}-{c['ob']['upper']:.0f}] inv:{c['ob']['invalidation']:.0f}")
+        if c.get("fvg"):
+            levels.append(f"FVG[{c['fvg']['lower']:.0f}-{c['fvg']['upper']:.0f}] {c['fvg']['status']}")
+        if c.get("bos",{}).get("direction"):
+            levels.append(f"BOS:{c['bos']['level']:.0f}")
+        table_rows.append({
+            "rank": rank, "score": c.get("score",0.0), "symbol": c["symbol"], "name": c.get("name",""),
+            "market": c.get("market",""), "tags": c.get("tags",[]), "close": c.get("close",0.0),
+            "ma200": c.get("ma200"), "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
+        })
+
+    signal_map = {r["signal"].symbol: r for r in signal_rows}
+    selected = trade_rules.select_buy_candidates([(r["signal"], r["entry_plan"]) for r in signal_rows])
+    buy_candidates = [signal_map[s[0].symbol] for s in selected]
+    buy_valid_from = trade_rules.next_trading_day(cal, ymd) if cal else ymd
+
+    state = storage.load_json("state/positions_live.json", default={"positions": [], "pending_entries": [], "pending_exits": [], "last_date": None})
+    positions = [Position(**p) for p in state.get("positions", [])]
+    pending_entries = list(state.get("pending_entries", []))
+    pending_exits = list(state.get("pending_exits", []))
+
+    last_date = state.get("last_date")
+    if last_date:
+        delta_days = (pd.to_datetime(ymd) - pd.to_datetime(last_date)).days
+        if delta_days > 0:
+            for pos in positions:
+                pos.hold_days += delta_days
+
+    # apply pending exits that are due
+    remaining_exits = []
+    for pe in pending_exits:
+        if pe.get("valid_from") and pe["valid_from"] <= ymd:
+            positions = [p for p in positions if p.symbol != pe.get("symbol")]
+        else:
+            remaining_exits.append(pe)
+    pending_exits = remaining_exits
+
+    # apply pending entries that are due
+    remaining_entries = []
+    for pe in pending_entries:
+        if pe.get("valid_from") and pe["valid_from"] <= ymd:
+            sym = pe.get("symbol")
+            ctx = ctx_map.get(sym)
+            if ctx is None:
+                remaining_entries.append(pe)
+                continue
+            df = storage.load_ohlcv_cache(sym)
+            if df is None or df.empty:
+                remaining_entries.append(pe)
+                continue
+            row = df[df["date"] == pd.to_datetime(ymd)]
+            if row.empty:
+                remaining_entries.append(pe)
+                continue
+            entry_px = float(row["open"].iloc[0])
+            signal = TradeSignal(**pe["signal"])
+            entry_plan = EntryPlan(**pe["entry_plan"])
+            position = trade_rules.build_position(signal, entry_plan, ymd, entry_px, 1.0, ctx)
+            positions.append(position)
+        else:
+            remaining_entries.append(pe)
+    pending_entries = remaining_entries
+
+    sell_rows = []
+    portfolio_rows = []
+    sell_details = []
+    for pos in positions:
+        ctx = ctx_map.get(pos.symbol)
+        df = storage.load_ohlcv_cache(pos.symbol)
+        if df is None or df.empty:
+            continue
+        row = df[df["date"] == pd.to_datetime(ymd)]
+        if row.empty:
+            continue
+        bar = {
+            "open": float(row["open"].iloc[0]),
+            "high": float(row["high"].iloc[0]),
+            "low": float(row["low"].iloc[0]),
+            "close": float(row["close"].iloc[0]),
+        }
+        if ctx:
+            trade_rules.update_trailing_stop(pos, ctx)
+        exit_decisions = trade_rules.evaluate_exit(pos, bar, ctx, ymd)
+        last_price = bar["close"]
+        pnl_pct = (last_price - pos.entry_price) / max(pos.entry_price, 1e-6) * 100.0
+        risk_pct = (last_price - pos.stop_loss) / max(last_price, 1e-6) * 100.0
+        exit_action = next((d for d in exit_decisions if d.action == "EXIT"), None)
+        next_action = "HOLD"
+        if exit_action:
+            next_action = "EXIT"
+            pending_exits.append(
+                {
+                    "symbol": pos.symbol,
+                    "valid_from": trade_rules.next_trading_day(cal, ymd),
+                    "reason": exit_action.reason,
+                }
+            )
+            pos.state = "exit_pending"
+        for decision in exit_decisions:
+            if decision.action == "PARTIAL" and decision.size:
+                pos.remaining_size = max(0.0, pos.remaining_size - decision.size)
+                pos.took_partial = True
+                if trade_rules.move_stop_to_entry and pos.stop_loss < pos.entry_price:
+                    pos.stop_loss = pos.entry_price
+
+        portfolio_rows.append(
+            {
+                "symbol": pos.symbol,
+                "name": pos.name,
+                "entry_price": pos.entry_price,
+                "last_price": last_price,
+                "pnl_pct": pnl_pct,
+                "risk_pct": risk_pct,
+                "next_action": next_action,
+            }
+        )
+
+        if exit_action:
+            sell_rows.append(
+                {
+                    "symbol": pos.symbol,
+                    "name": pos.name,
+                    "entry_price": pos.entry_price,
+                    "last_price": last_price,
+                    "pnl_pct": pnl_pct,
+                    "exit_reason": exit_action.reason,
+                    "next_action": next_action,
+                }
+            )
+            chart_b64 = None
+            if ctx:
+                ctx = dict(ctx)
+                ctx["position"] = pos.to_dict()
+                df_chart = storage.load_ohlcv_cache(pos.symbol)
+                if df_chart is not None and not df_chart.empty:
+                    df_chart = df_chart.sort_values("date").reset_index(drop=True)
+                    from .analysis.indicators import sma, rsi, atr
+                    df_chart["ma20"] = sma(df_chart["close"], int(cfg.analysis.ma_fast))
+                    df_chart["ma200"] = sma(df_chart["close"], int(cfg.analysis.ma_slow))
+                    df_chart["rsi14"] = rsi(df_chart["close"], int(cfg.analysis.rsi_period))
+                    df_chart["atr14"] = atr(df_chart, int(cfg.analysis.atr_period))
+                    chart_b64 = plot_symbol_chart(df_chart, ctx, lookback=int(cfg.report.chart_lookback))
+            breakdown = (ctx or {}).get("soft_score_breakdown", {})
+            score_text = "\n".join(trade_rules.describe_score_breakdown(breakdown)) if breakdown else "(no components)"
+            sell_details.append(
+                {
+                    "symbol": pos.symbol,
+                    "name": pos.name,
+                    "market": pos.market,
+                    "close": last_price,
+                    "position": pos.to_dict(),
+                    "pnl_pct": pnl_pct,
+                    "next_action": next_action,
+                    "tags": (ctx or {}).get("tags", []),
+                    "chart_b64": chart_b64 or "",
+                    "score_text": score_text,
+                    "reason_text": "\n".join(trade_rules.build_sell_reasons(exit_decisions, pos, ctx or {})),
+                }
+            )
+
+    # add new pending entries from buy candidates
+    existing_pending = {(e.get("symbol"), e.get("valid_from")) for e in pending_entries}
+    for row in buy_candidates:
+        signal = row["signal"]
+        key = (signal.symbol, signal.valid_from)
+        if key in existing_pending:
+            continue
+        existing_pending.add(key)
+        pending_entries.append(
+            {
+                "symbol": signal.symbol,
+                "valid_from": signal.valid_from,
+                "signal": signal.to_dict(),
+                "entry_plan": row["entry_plan"].to_dict(),
+            }
+        )
+
+    storage.save_json(
+        "state/positions_live.json",
+        {
+            "positions": [p.to_dict() for p in positions],
+            "pending_entries": pending_entries,
+            "pending_exits": pending_exits,
+            "last_date": ymd,
+        },
+    )
+    storage.save_json(
+        f"snapshots/{ymd}/positions.json",
+        {
+            "positions": [p.to_dict() for p in positions],
+            "pending_entries": pending_entries,
+            "pending_exits": pending_exits,
+            "last_date": ymd,
+        },
+    )
+
     detail_n = int(cfg.scoring.top_detail)
-    details = rows_sorted[:detail_n]
-    # charts: need df again; load from cache and recompute indicators for plotting
-    for c in details:
+    buy_details = []
+    for row in buy_candidates[:detail_n]:
+        c = dict(row["ctx"])
+        c["signal"] = row["signal"].to_dict()
+        c["entry_plan"] = row["entry_plan"].to_dict()
         df = storage.load_ohlcv_cache(c["symbol"])
-        # indicators should already exist in engine but not stored; recompute minimal for plotting
         df = df.sort_values("date").reset_index(drop=True)
         from .analysis.indicators import sma, rsi, atr
         df["ma20"] = sma(df["close"], int(cfg.analysis.ma_fast))
@@ -132,7 +367,6 @@ def run(config_path: str) -> None:
         df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
         df["atr14"] = atr(df, int(cfg.analysis.atr_period))
         c["chart_b64"] = plot_symbol_chart(df, c, lookback=int(cfg.report.chart_lookback))
-        # context text
         lev=[]
         if c.get("bos",{}).get("direction"):
             lev.append(f"BOS {c['bos']['direction']} level={c['bos']['level']:.0f} q={c['bos'].get('quality',0):.2f}")
@@ -141,30 +375,44 @@ def run(config_path: str) -> None:
         if c.get("fvg"):
             f=c["fvg"]; lev.append(f"FVG {f['kind']} zone=[{f['lower']:.0f},{f['upper']:.0f}] status={f['status']} age={f.get('age',0)}")
         c["context_text"] = "\n".join(lev) if lev else "(no recent zones detected)"
-        c["score_text"] = "\n".join([f"{x['key']}: {x['w']}" + (f" (val={x.get('val')})" if x.get('val') is not None else "") for x in c.get("score_components",[])]) or "(no components)"
+        c["score_text"] = "\n".join(
+            trade_rules.describe_score_breakdown(row["signal"].score_breakdown)
+        ) if row["signal"].score_breakdown else "(no components)"
+        c["gate_text"] = "\n".join([f"{k}: {'PASS' if v else 'FAIL'}" for k, v in row["signal"].gates.items()])
+        plan_reasons = row["entry_plan"].rationale + [f"Invalidation: {row['entry_plan'].invalidation}"]
+        all_reasons = list(row["signal"].reasons) + plan_reasons
+        c["reason_text"] = "\n".join(all_reasons) if all_reasons else "(no reasons)"
+        buy_details.append(c)
 
-    table_rows=[]
-    for rank, c in enumerate(rows_sorted[: int(cfg.report.max_table_rows)], start=1):
-        levels=[]
-        if c.get("ob"): levels.append(f"OB[{c['ob']['lower']:.0f}-{c['ob']['upper']:.0f}] inv:{c['ob']['invalidation']:.0f}")
-        if c.get("fvg"): levels.append(f"FVG[{c['fvg']['lower']:.0f}-{c['fvg']['upper']:.0f}] {c['fvg']['status']}")
-        if c.get("bos",{}).get("direction"): levels.append(f"BOS:{c['bos']['level']:.0f}")
-        table_rows.append({
-            "rank": rank, "score": c.get("score",0.0), "symbol": c["symbol"], "name": c.get("name",""),
-            "market": c.get("market",""), "tags": c.get("tags",[]), "close": c.get("close",0.0),
-            "ma200": c.get("ma200"), "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
-        })
+    buy_rows = []
+    for rank, row in enumerate(buy_candidates, start=1):
+        buy_rows.append(
+            {
+                "rank": rank,
+                "symbol": row["signal"].symbol,
+                "name": row["ctx"].get("name", ""),
+                "signal": row["signal"],
+                "entry_plan": row["entry_plan"],
+                "gates": [{"key": k, "pass": v} for k, v in row["signal"].gates.items()],
+            }
+        )
 
     payload = {
         "title": cfg.report.title,
         "generated_at": now_kst_iso(),
         "universe_n": len(universe),
         "liquidity_window": cfg.universe.liquidity_window,
-        "detail_n": detail_n,
         "regime_kospi": regime_kospi,
         "regime_kosdaq": regime_kosdaq,
+        "execution_guide": cfg.report.execution_guide,
+        "tp_sl_conflict_note": cfg.report.tp_sl_conflict_note,
+        "buy_valid_from": buy_valid_from,
         "table_rows": table_rows,
-        "details": details
+        "buy_rows": buy_rows,
+        "sell_rows": sell_rows,
+        "portfolio_rows": portfolio_rows,
+        "buy_details": buy_details,
+        "sell_details": sell_details,
     }
     out_html = os.path.join(out_dir, "report.html")
     render_report(out_html, payload, include_js=bool(cfg.report.include_sort_search_js))

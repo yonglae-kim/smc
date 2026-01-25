@@ -7,10 +7,8 @@ from matplotlib.patches import Rectangle
 
 def _candles(ax, df: pd.DataFrame):
     # Basic candlestick without mplfinance.
-    x = np.arange(len(df))
     for i, r in df.iterrows():
         o,h,l,c = r["open"], r["high"], r["low"], r["close"]
-        up = c >= o
         ax.vlines(i, l, h, linewidth=0.8)
         body_low = min(o,c)
         body_h = max(1e-9, abs(c-o))
@@ -20,9 +18,11 @@ def _candles(ax, df: pd.DataFrame):
 
 def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180) -> str:
     """Return base64 PNG for single symbol. Price + RSI subchart, zones overlay."""
-    d = df.tail(lookback).reset_index(drop=True).copy()
+    full = df.reset_index(drop=True).copy()
+    d = full.tail(lookback).reset_index(drop=True).copy()
     if len(d) < 30:
-        d = df.copy().reset_index(drop=True)
+        d = full.copy().reset_index(drop=True)
+    start_idx = max(0, len(full) - len(d))
 
     fig = plt.figure(figsize=(10,6))
     gs = fig.add_gridspec(3,1, height_ratios=[2.2, 0.1, 1.0], hspace=0.05)
@@ -30,6 +30,21 @@ def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180) -> str:
     ax2 = fig.add_subplot(gs[2,0], sharex=ax)
 
     _candles(ax, d)
+
+    # pivot/fractal points
+    pivots = ctx.get("pivots") or []
+    for p in pivots:
+        idx = int(p["idx"]) - start_idx
+        if 0 <= idx < len(d):
+            color = "tab:green" if p["kind"] == "L" else "tab:red"
+            marker = "^" if p["kind"] == "L" else "v"
+            ax.scatter(idx, p["price"], color=color, s=18, marker=marker, zorder=3)
+
+    struct_pts = ctx.get("structure_points") or []
+    for p in struct_pts[-8:]:
+        idx = int(p["idx"]) - start_idx
+        if 0 <= idx < len(d) and p.get("cls"):
+            ax.text(idx, p["price"], p["cls"], fontsize=7, color="#333", ha="center", va="bottom")
 
     # overlays
     if "ma20" in d.columns:
@@ -61,6 +76,22 @@ def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180) -> str:
         ax2.axhline(30, linewidth=0.6, linestyle=":")
         ax2.set_ylim(0,100)
     ax2.grid(True, linewidth=0.3)
+
+    # entry/SL/TP lines
+    entry_plan = ctx.get("entry_plan") or {}
+    position = ctx.get("position") or {}
+    entry_px = entry_plan.get("entry_price") or position.get("entry_price")
+    stop_px = entry_plan.get("stop_loss") or position.get("stop_loss")
+    tp_px = entry_plan.get("take_profit") or position.get("take_profit")
+    if entry_px:
+        ax.axhline(entry_px, color="blue", linestyle="--", linewidth=1.0)
+        ax.text(0.01, 0.78, f"Entry {entry_px:.0f}", transform=ax.transAxes, fontsize=8, color="blue")
+    if stop_px:
+        ax.axhline(stop_px, color="red", linestyle="--", linewidth=1.0)
+        ax.text(0.01, 0.72, f"SL {stop_px:.0f}", transform=ax.transAxes, fontsize=8, color="red")
+    if tp_px:
+        ax.axhline(tp_px, color="green", linestyle="--", linewidth=1.0)
+        ax.text(0.01, 0.66, f"TP {tp_px:.0f}", transform=ax.transAxes, fontsize=8, color="green")
 
     # x ticks by date
     xt = np.linspace(0, len(d)-1, 6).astype(int)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Callable
 
 import pandas as pd
@@ -9,26 +8,9 @@ from ..engine import analyze_symbol
 from ..regime.regime import compute_regime
 from ..scoring import score_candidate
 from ..strategy.base import Strategy
+from ..trading.models import Position
+from ..trading.rules import TradeRules
 from ..utils.progress import Progress
-
-
-@dataclass
-class Position:
-    symbol: str
-    name: str
-    entry_date: str
-    entry_px: float
-    size: float
-    remaining_size: float
-    stop_px: float
-    tp1_px: float
-    tp2_px: float
-    tp1_size: float
-    took_partial: bool = False
-    hold: int = 0
-    reason: str = ""
-    entry_score: float = 0.0
-    entry_breakdown: Dict[str, Any] = None
 
 
 def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
@@ -85,6 +67,7 @@ def run_backtest(
     if idx_kosdaq is not None and len(idx_kosdaq) > 0:
         idx_kosdaq = idx_kosdaq.sort_values("date").reset_index(drop=True)
 
+    trade_rules = TradeRules(cfg, strategy=strategy)
     positions: Dict[str, Position] = {}
     trades: List[Dict[str, Any]] = []
     equity = 1_000_000.0
@@ -93,16 +76,7 @@ def run_backtest(
     max_positions = int(cfg.backtest.max_positions)
     fee_bps = float(cfg.backtest.fee_bps)
     slippage_bps = float(cfg.backtest.slippage_bps)
-    fill_price = str(cfg.backtest.fill_price)
-    tp_cfg = cfg.backtest.tp
-    tp_rr_target = max(0.1, float(tp_cfg.rr_target))
-    tp_partial_rr = max(0.0, float(tp_cfg.partial_rr))
-    tp_partial_size = float(tp_cfg.partial_size)
-    move_stop_to_entry = bool(tp_cfg.move_stop_to_entry)
-    tp_partial_size = max(0.0, min(tp_partial_size, 1.0))
-    if tp_partial_rr >= tp_rr_target or tp_partial_size <= 0:
-        tp_partial_rr = 0.0
-        tp_partial_size = 0.0
+    fill_price = str(trade_rules.entry_price_mode)
     stop_grace_days = int(getattr(cfg.backtest, "stop_grace_days", 0))
 
     prog = Progress(total=len(cal), label="SimDays", every=25)
@@ -130,61 +104,84 @@ def run_backtest(
         for sym, pos in list(positions.items()):
             df = ohlcv_map.get(sym)
             if df is None or len(df) == 0:
-                pos.hold += 1
+                pos.hold_days += 1
                 continue
 
             d = df[df["date"] == dt]
             if d.empty:
-                pos.hold += 1
+                pos.hold_days += 1
                 continue
 
             row = d.iloc[0]
             close_px = float(row["close"])
             low_px = float(row["low"])
             high_px = float(row["high"])
+            ctx = None
+            if trade_rules.exit_on_structure_break or trade_rules.exit_on_score_drop or trade_rules.trail_atr_mult > 0:
+                meta = next((m for m in symbols_meta if m["symbol"] == sym), None)
+                if meta is not None:
+                    df_slice = df[df["date"] <= dt].copy()
+                    index_df = None
+                    if meta.get("market") == "KOSPI" and idx_kospi is not None and len(idx_kospi) > 0:
+                        index_df = idx_kospi[idx_kospi["date"] <= dt].copy()
+                    elif meta.get("market") == "KOSDAQ" and idx_kosdaq is not None and len(idx_kosdaq) > 0:
+                        index_df = idx_kosdaq[idx_kosdaq["date"] <= dt].copy()
+                    ctx = analyze_symbol(meta, df_slice, index_df, cfg)
+                    if ctx:
+                        ctx["regime"] = (
+                            compute_regime(index_df, cfg)
+                            if index_df is not None
+                            else {"tag": "UNKNOWN", "ma200": None, "rsi": None, "atr_spike": None}
+                        )
+                        ctx = score_candidate(ctx, cfg.scoring.weights)
+                        ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
+                        trade_rules.update_trailing_stop(pos, ctx)
 
-            if stop_grace_days <= 0 or pos.hold >= stop_grace_days:
-                if low_px <= pos.stop_px:
-                    to_close.append((sym, pos.stop_px, "STOP"))
-                    continue
-
-            if not pos.took_partial and pos.tp1_size > 0 and high_px >= pos.tp1_px:
-                partial_closes.append((sym, pos.tp1_px, "TP1", pos.tp1_size))
-                pos.remaining_size = max(0.0, pos.remaining_size - pos.tp1_size)
-                pos.took_partial = True
-                if pos.remaining_size <= 0:
-                    positions.pop(sym, None)
-                    continue
-                if move_stop_to_entry and pos.stop_px < pos.entry_px:
-                    pos.stop_px = pos.entry_px
-
-            if pos.remaining_size > 0 and high_px >= pos.tp2_px:
-                to_close.append((sym, pos.tp2_px, "TP"))
+            if stop_grace_days > 0 and pos.hold_days < stop_grace_days:
+                pos.hold_days += 1
                 continue
 
-            pos.hold += 1
-            if pos.hold >= 20:
-                to_close.append((sym, close_px, "TIME"))
+            exit_decisions = trade_rules.evaluate_exit(
+                pos,
+                {"open": float(row["open"]), "high": high_px, "low": low_px, "close": close_px},
+                ctx,
+                date_str,
+            )
+
+            for d in exit_decisions:
+                if d.action == "PARTIAL" and d.size:
+                    partial_closes.append((sym, d.price, "TP1", d.size))
+                if d.action == "EXIT":
+                    to_close.append((sym, d.price, d.reason))
+                    break
+
+            pos.hold_days += 1
 
         for sym, exit_px, why, size_to_close in partial_closes:
             pos = positions.get(sym)
             if pos is None:
                 continue
             exit_px_costed = exit_px * (1.0 - (fee_bps + slippage_bps) / 10000.0)
-            pnl = (exit_px_costed - pos.entry_px) * size_to_close
+            pnl = (exit_px_costed - pos.entry_price) * size_to_close
             equity += pnl
+            pos.remaining_size = max(0.0, pos.remaining_size - size_to_close)
+            pos.took_partial = True
+            if trade_rules.move_stop_to_entry and pos.stop_loss < pos.entry_price:
+                pos.stop_loss = pos.entry_price
+            if pos.remaining_size <= 0:
+                positions.pop(sym, None)
             trades.append(
                 {
                     "symbol": sym,
                     "name": pos.name,
-                    "entry_date": pos.entry_date,
+                    "entry_date": pos.entry_time,
                     "exit_date": date_str,
-                    "entry_px": pos.entry_px,
+                    "entry_px": pos.entry_price,
                     "exit_px": exit_px_costed,
                     "size": size_to_close,
                     "pnl": pnl,
                     "exit_reason": why,
-                    "entry_reason": pos.reason,
+                    "entry_reason": pos.exit_rules.get("entry_reason", ""),
                     "entry_score": pos.entry_score,
                     "entry_breakdown": pos.entry_breakdown or {},
                 }
@@ -199,20 +196,20 @@ def run_backtest(
             if size_to_close <= 0:
                 continue
             exit_px_costed = exit_px * (1.0 - (fee_bps + slippage_bps) / 10000.0)
-            pnl = (exit_px_costed - pos.entry_px) * size_to_close
+            pnl = (exit_px_costed - pos.entry_price) * size_to_close
             equity += pnl
             trades.append(
                 {
                     "symbol": sym,
                     "name": pos.name,
-                    "entry_date": pos.entry_date,
+                    "entry_date": pos.entry_time,
                     "exit_date": date_str,
-                    "entry_px": pos.entry_px,
+                    "entry_px": pos.entry_price,
                     "exit_px": exit_px_costed,
                     "size": size_to_close,
                     "pnl": pnl,
                     "exit_reason": why,
-                    "entry_reason": pos.reason,
+                    "entry_reason": pos.exit_rules.get("entry_reason", ""),
                     "entry_score": pos.entry_score,
                     "entry_breakdown": pos.entry_breakdown or {},
                 }
@@ -262,20 +259,21 @@ def run_backtest(
                 )
                 ctx = score_candidate(ctx, cfg.scoring.weights)
 
-                ranked = strategy.rank(date_str, sym, ctx)
-                if ranked is None:
+                signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.get("close", 0.0)))
+                if not trade_rules.signal_passes(signal):
                     stats["strategy_exclude"] += 1
-                    continue
-
-                s, reason, breakdown = ranked
-                day_candidates.append((float(s), sym, ctx, df_full, reason, breakdown, meta.get("name", "")))
+                day_candidates.append((float(signal.score), sym, ctx, df_full, signal, entry_plan, meta.get("name", "")))
 
             stats["candidates"] += len(day_candidates)
-
-            day_candidates.sort(key=lambda x: x[0], reverse=True)
+            selected_pairs = trade_rules.select_buy_candidates([(c[4], c[5]) for c in day_candidates])
+            selected_symbols = {p[0].symbol for p in selected_pairs}
+            if not selected_symbols:
+                continue
+            day_candidates = [c for c in day_candidates if c[1] in selected_symbols]
+            day_candidates.sort(key=lambda x: (-x[0], x[1]))
             slots = max_positions - len(positions)
 
-            for s, sym, ctx, df_full, reason, breakdown, name in day_candidates[:slots]:
+            for s, sym, ctx, df_full, signal, entry_plan, name in day_candidates[:slots]:
                 entry_dt = dt
                 if fill_price == "next_open":
                     df_after = df_full[df_full["date"] > dt].head(1)
@@ -288,52 +286,14 @@ def run_backtest(
                     if d.empty:
                         continue
                     entry_px = float(d["close"].iloc[0])
-
-                ob = ctx.get("ob") or {}
-                stop_px = float(ob.get("invalidation", entry_px * 0.95))
-                min_risk_ratio = 0.001
-                if stop_px >= entry_px:
-                    adjusted_stop = entry_px * (1 - min_risk_ratio)
-                    print(
-                        "[Backtest][Warn] stop_px >= entry_px; adjusting stop",
-                        {"symbol": sym, "entry_px": entry_px, "stop_px": stop_px, "adjusted_stop": adjusted_stop},
-                        flush=True,
-                    )
-                    stop_px = adjusted_stop
-                risk_per_share = max(1e-6, entry_px - stop_px)
-                min_risk_per_share = entry_px * min_risk_ratio
-                if risk_per_share < min_risk_per_share:
-                    print(
-                        "[Backtest][Warn] risk_per_share too small",
-                        {"symbol": sym, "entry_px": entry_px, "stop_px": stop_px, "risk_per_share": risk_per_share},
-                        flush=True,
-                    )
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
+                risk_per_share = max(1e-6, entry_px - entry_plan.stop_loss)
                 size = max(0.0, risk_budget / risk_per_share)
-
-                tp2_px = entry_px + tp_rr_target * risk_per_share
-                tp1_px = tp2_px
-                tp1_size = 0.0
-                if tp_partial_size > 0:
-                    tp1_px = entry_px + tp_partial_rr * risk_per_share
-                    tp1_size = size * tp_partial_size
                 entry_px_costed = _apply_cost(entry_px, fee_bps, slippage_bps)
 
-                positions[sym] = Position(
-                    symbol=sym,
-                    name=name,
-                    entry_date=str(entry_dt.date()),
-                    entry_px=entry_px_costed,
-                    size=size,
-                    remaining_size=size,
-                    stop_px=stop_px,
-                    tp1_px=tp1_px,
-                    tp2_px=tp2_px,
-                    tp1_size=tp1_size,
-                    reason=reason,
-                    entry_score=float(s),
-                    entry_breakdown=breakdown,
-                )
+                position = trade_rules.build_position(signal, entry_plan, str(entry_dt.date()), entry_px_costed, size, ctx)
+                position.exit_rules["entry_reason"] = "; ".join(signal.reasons)
+                positions[sym] = position
                 stats["entered"] += 1
 
         equity_curve.append({"date": date_str, "equity": equity, "positions": len(positions)})
