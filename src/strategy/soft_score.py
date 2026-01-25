@@ -61,11 +61,6 @@ class SoftScoreStrategy(Strategy):
         self.w_ob_age_old = float(p.get("w_ob_age_old", -0.5))
         self.fvg_age_max = int(p.get("fvg_age_max", 60))
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
-        self.require_tailwind = bool(p.get("require_tailwind", False))
-        self.require_above_ma200 = bool(p.get("require_above_ma200", False))
-        trade_cfg = getattr(cfg, "trade", None)
-        if trade_cfg is not None and getattr(trade_cfg, "min_score", None) is not None:
-            self.threshold = max(self.threshold, float(trade_cfg.min_score))
 
     def _hard_gates(self, ctx: Dict[str, Any]) -> Dict[str, bool]:
         # Hard Gate
@@ -81,11 +76,6 @@ class SoftScoreStrategy(Strategy):
 
         room_to_high_atr = ctx.get("room_to_high_atr")
         gates["room_to_high"] = room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
-
-        regime = (ctx.get("regime") or {})
-        rtag = regime.get("tag")
-        gates["regime_tailwind"] = (not self.require_tailwind) or (rtag == "TAILWIND")
-        gates["above_ma200"] = (not self.require_above_ma200) or bool(ctx.get("above_ma200"))
         return gates
 
     def evaluate(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
