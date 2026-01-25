@@ -7,8 +7,8 @@ from ..analysis.indicators import sma, rsi, atr
 def compute_regime(index_df: pd.DataFrame, cfg) -> Dict[str, Any]:
     df = index_df.copy()
     df["ma200"] = sma(df["close"], 200)
-    df["rsi14"] = rsi(df["close"], int(cfg.rsi_period))
-    df["atr14"] = atr(df, int(cfg.atr_period))
+    df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
+    df["atr14"] = atr(df, int(cfg.analysis.atr_period))
     last = df.iloc[-1]
     ma200 = float(last["ma200"]) if not pd.isna(last["ma200"]) else None
     rsi14 = float(last["rsi14"]) if not pd.isna(last["rsi14"]) else None
@@ -19,7 +19,11 @@ def compute_regime(index_df: pd.DataFrame, cfg) -> Dict[str, Any]:
 
     # ATR spike vs recent median
     atr_med = float(df["atr14"].tail(60).median()) if df["atr14"].tail(60).notna().any() else None
-    atr_spike = (atr14 is not None and atr_med is not None and atr14 >= float(cfg.atr_spike_mult) * atr_med)
+    atr_spike = (
+        atr14 is not None
+        and atr_med is not None
+        and atr14 >= float(cfg.regime.atr_spike_mult) * atr_med
+    )
 
     return {
         "asof": str(last["date"].date()),

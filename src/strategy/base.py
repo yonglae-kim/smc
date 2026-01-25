@@ -13,6 +13,6 @@ class Signal:
 
 class Strategy(ABC):
     @abstractmethod
-    def rank(self, date: str, symbol: str, ctx: Dict[str,Any]) -> Optional[Tuple[float,str,Dict[str,Any]]]:
+    def rank(self, date: str, symbol: str, ctx: Dict[str,Any], min_score: Optional[float] = None) -> Optional[Tuple[float,str,Dict[str,Any]]]:
         """Return (score, reason, breakdown) for entry consideration, or None to exclude."""
         raise NotImplementedError

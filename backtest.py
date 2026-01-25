@@ -19,12 +19,18 @@ def main():
     args = ap.parse_args()
     cfg = load_config(args.config)
 
+    cache_mode = cfg.network.cache_mode
+    snapshot_id = cfg.network.cache_snapshot_id or today_kst().strftime("%Y-%m-%d")
+    cache_dir = os.path.join(cfg.app.cache_dir, "http", snapshot_id if cache_mode == "snapshot" else "latest")
+    from src.utils.http_cache import HttpCache
+    http_cache = HttpCache(cache_dir, ttl_sec=cfg.network.cache_ttl_sec, mode=cache_mode)
     http = HttpClient(
         timeout_sec=cfg.network.timeout_sec,
         max_retries=cfg.network.max_retries,
         backoff_base_sec=cfg.network.backoff_base_sec,
         jitter_sec=cfg.network.jitter_sec,
         rate_limit_per_sec=cfg.network.rate_limit_per_sec,
+        cache=http_cache,
     )
     storage = FSStorage(cfg.app.cache_dir)
     provider = NaverChartProvider(http)

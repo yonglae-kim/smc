@@ -14,6 +14,9 @@ class NetworkCfg(BaseModel):
     backoff_base_sec: float = 0.6
     jitter_sec: float = 0.35
     rate_limit_per_sec: float = 4.0
+    cache_mode: str = "use"  # use | refresh | snapshot
+    cache_ttl_sec: float = 0.0
+    cache_snapshot_id: str = ""
 
 class UniverseCfg(BaseModel):
     ohlcv_lookback_days: int = 120
@@ -48,6 +51,28 @@ class ReportCfg(BaseModel):
     max_table_rows: int = 500
     chart_lookback: int = 180
     include_sort_search_js: bool = True
+    execution_guide: str = "이 리포트는 19:00 KST 종가 이후 계산되며, 다음 거래일 시가 기준 실행을 가정합니다."
+    tp_sl_conflict_note: str = "OHLC만 있을 때 TP/SL 동시 터치 시 보수적(Stop 우선) 가정."
+
+class TradeCfg(BaseModel):
+    execution_delay_days: int = 1
+    entry_price_mode: str = "next_open"
+    force_top_k: int = 0
+    min_score: float = 4.0
+    min_expected_return: float = 0.02
+    min_rr: float = 1.5
+    min_risk_ratio: float = 0.001
+    stop_atr_mult: float = 1.5
+    tp_rr_target: float = 2.0
+    tp_partial_rr: float = 1.0
+    tp_partial_size: float = 0.5
+    move_stop_to_entry: bool = True
+    max_hold_days: int = 20
+    score_exit_threshold: float = 2.0
+    exit_on_structure_break: bool = True
+    exit_on_score_drop: bool = True
+    tp_sl_conflict: str = "conservative"  # conservative | optimistic
+    trail_atr_mult: float = 0.0
 
 
 class BacktestCfg(BaseModel):
@@ -79,6 +104,7 @@ class Config(BaseModel):
     scoring: ScoringCfg
     regime: RegimeCfg
     report: ReportCfg
+    trade: TradeCfg = TradeCfg()
     backtest: BacktestCfg
 
 def load_config(path: str) -> Config:

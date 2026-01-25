@@ -8,3 +8,5 @@ pydantic
 python-dateutil
 requests
 pyyaml
+pytest
+ruff

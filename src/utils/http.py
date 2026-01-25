@@ -4,6 +4,19 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import requests
 
+from .http_cache import HttpCache
+
+
+class CachedResponse:
+    def __init__(self, text: str, encoding: Optional[str] = None, url: str = ""):
+        self.text = text
+        self.encoding = encoding
+        self.status_code = 200
+        self.url = url
+
+    def raise_for_status(self) -> None:
+        return None
+
 @dataclass
 class HttpClient:
     timeout_sec: float
@@ -11,6 +24,7 @@ class HttpClient:
     backoff_base_sec: float
     jitter_sec: float
     rate_limit_per_sec: float
+    cache: Optional[HttpCache] = None
 
     _last_ts: float = 0.0
 
@@ -28,6 +42,10 @@ class HttpClient:
         headers = headers or {}
         headers.setdefault("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122 Safari/537.36")
         last_err = None
+        if self.cache and self.cache.mode in ("use", "snapshot"):
+            cached = self.cache.load(url, params)
+            if cached:
+                return CachedResponse(cached.get("text", ""), cached.get("encoding"), url=url)
         for i in range(self.max_retries+1):
             try:
                 self._throttle()
@@ -36,6 +54,8 @@ class HttpClient:
                 if "finance.naver.com" in url and resp.encoding is None:
                     resp.encoding = "euc-kr"
                 resp.raise_for_status()
+                if self.cache and self.cache.mode in ("use", "refresh", "snapshot"):
+                    self.cache.save(url, params, resp.text, resp.encoding)
                 return resp
             except Exception as e:
                 last_err = e

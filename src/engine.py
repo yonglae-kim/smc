@@ -86,8 +86,6 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
 
     # distances in ATR
     dist_to_ob = None
-    invalidation = None
-    ob_status = None
     ob_quality = None
     ob_age = None
     if ob and atr_last and atr_last>0:
@@ -99,13 +97,10 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         else:
             dist = 0.0
         dist_to_ob = float(dist/(atr_last+1e-9))
-        invalidation = float(ob.invalidation)
-        ob_status = ob.status
         ob_quality = float(ob.quality)
         ob_age = int(ob.age)
 
     dist_to_fvg = None
-    fvg_status = None
     fvg_age = None
     if fvg_pick and atr_last and atr_last>0:
         lower, upper = fvg_pick.lower, fvg_pick.upper
@@ -116,7 +111,6 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         else:
             dist = 0.0
         dist_to_fvg = float(dist/(atr_last+1e-9))
-        fvg_status = fvg_pick.status
         fvg_age = int(fvg_pick.age)
 
     # Confluence: OB and FVG overlap/near
@@ -162,6 +156,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "momentum_60": momentum_60,
         "ma20_slope_atr": ma20_slope_atr,
         "room_to_high_atr": room_to_high_atr,
+        "recent_high_20": recent_high_20,
         "structure_bias": bias,
         "bos": bos,
         "ob": None if ob is None else {
@@ -180,6 +175,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,
         "rs": rs,
+        "pivots": [{"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength} for p in piv[-40:]],
+        "structure_points": struct_pts[-20:],
         "notes": [
             f"Fractal pivot confirmation lag: last {cfg.analysis.fractal_n} bars are unconfirmed for pivots."
         ]

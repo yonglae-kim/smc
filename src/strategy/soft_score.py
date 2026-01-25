@@ -63,25 +63,38 @@ class SoftScoreStrategy(Strategy):
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
         self.require_tailwind = bool(p.get("require_tailwind", False))
         self.require_above_ma200 = bool(p.get("require_above_ma200", False))
+        trade_cfg = getattr(cfg, "trade", None)
+        if trade_cfg is not None and getattr(trade_cfg, "min_score", None) is not None:
+            self.threshold = max(self.threshold, float(trade_cfg.min_score))
 
-    def rank(self, date: str, symbol: str, ctx: Dict[str,Any]) -> Optional[Tuple[float,str,Dict[str,Any]]]:
+    def _hard_gates(self, ctx: Dict[str, Any]) -> Dict[str, bool]:
         # Hard Gate
         has_ob = bool(ctx.get("ob"))
         has_fvg = bool(ctx.get("fvg") or ctx.get("fvg_active"))
-        if not (has_ob or has_fvg):
-            return None
+        gates = {
+            "has_zone": bool(has_ob or has_fvg),
+        }
 
         ob = ctx.get("ob") or {}
         invalidation = ob.get("invalidation")
-        if invalidation is None and ctx.get("atr14") is None:
-            return None
+        gates["invalidation_available"] = invalidation is not None or ctx.get("atr14") is not None
 
         room_to_high_atr = ctx.get("room_to_high_atr")
-        if room_to_high_atr is not None and room_to_high_atr < self.min_room_to_high_atr:
-            return None
+        gates["room_to_high"] = room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
 
+        regime = (ctx.get("regime") or {})
+        rtag = regime.get("tag")
+        gates["regime_tailwind"] = (not self.require_tailwind) or (rtag == "TAILWIND")
+        gates["above_ma200"] = (not self.require_above_ma200) or bool(ctx.get("above_ma200"))
+        return gates
+
+    def evaluate(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
+        gates = self._hard_gates(ctx)
         breakdown: Dict[str,Any] = {}
         score = 0.0
+        has_ob = bool(ctx.get("ob"))
+        has_fvg = bool(ctx.get("fvg") or ctx.get("fvg_active"))
+        room_to_high_atr = ctx.get("room_to_high_atr")
 
         s_ob = _bucket_dist(ctx.get("dist_to_ob_atr"), self.dist_ob_levels) if has_ob else 0.0
         s_fvg = _bucket_dist(ctx.get("dist_to_fvg_atr"), self.dist_fvg_levels) if has_fvg else 0.0
@@ -98,10 +111,6 @@ class SoftScoreStrategy(Strategy):
 
         regime = (ctx.get("regime") or {})
         rtag = regime.get("tag")
-        if self.require_tailwind and rtag != "TAILWIND":
-            return None
-        if self.require_above_ma200 and not ctx.get("above_ma200"):
-            return None
         if rtag == "TAILWIND":
             score += self.w_regime_tailwind
             breakdown["regime"] = self.w_regime_tailwind
@@ -248,8 +257,21 @@ class SoftScoreStrategy(Strategy):
             breakdown["fvg_age"] = 0.0
 
         breakdown["total"] = score
-        if score < self.threshold:
-            return None
+        return {
+            "score": float(score),
+            "breakdown": breakdown,
+            "gates": gates,
+            "threshold": float(self.threshold),
+        }
 
+    def rank(self, date: str, symbol: str, ctx: Dict[str,Any], min_score: Optional[float] = None) -> Optional[Tuple[float,str,Dict[str,Any]]]:
+        eval_result = self.evaluate(ctx)
+        gates = eval_result["gates"]
+        if gates and not all(gates.values()):
+            return None
+        score = float(eval_result["score"])
+        threshold = float(min_score) if min_score is not None else float(eval_result["threshold"])
+        if score < threshold:
+            return None
         reason = f"SoftScore>=th({self.threshold}): {score:.1f}"
-        return score, reason, breakdown
+        return score, reason, eval_result["breakdown"]
