@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 import numpy as np
 import pandas as pd
 
-from .analysis.indicators import sma, rsi, atr
+from .analysis.indicators import sma, rsi, atr, macd
 from .analysis.smc.pivots import fractal_pivots, classify_structure
 from .analysis.smc.structure import bos_choch
 from .analysis.smc.fvg import detect_fvgs
@@ -22,6 +22,12 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     df["ma200"] = sma(df["close"], int(cfg.analysis.ma_slow))
     df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
     df["atr14"] = atr(df, int(cfg.analysis.atr_period))
+    macd_line, macd_signal, macd_hist = macd(df["close"])
+    df["macd_line"] = macd_line
+    df["macd_signal"] = macd_signal
+    df["macd_hist"] = macd_hist
+    if "volume" in df.columns:
+        df["vol_sma20"] = df["volume"].rolling(20, min_periods=20).mean()
 
     last = df.iloc[-1]
     atr_last = float(last["atr14"]) if not pd.isna(last["atr14"]) else None
@@ -39,9 +45,20 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
             fvg_pick = z; break
 
     close = float(last["close"])
+    ma20 = float(last["ma20"]) if not pd.isna(last["ma20"]) else None
     ma200 = float(last["ma200"]) if not pd.isna(last["ma200"]) else None
     above_ma200 = (ma200 is not None) and (close >= ma200)
+    above_ma20 = (ma20 is not None) and (close >= ma20)
+    ma20_above_ma200 = (ma20 is not None and ma200 is not None) and (ma20 >= ma200)
     rsi_last = float(last["rsi14"]) if not pd.isna(last["rsi14"]) else None
+    macd_line_last = float(last["macd_line"]) if not pd.isna(last["macd_line"]) else None
+    macd_signal_last = float(last["macd_signal"]) if not pd.isna(last["macd_signal"]) else None
+    macd_hist_last = float(last["macd_hist"]) if not pd.isna(last["macd_hist"]) else None
+    volume_last = float(last["volume"]) if "volume" in last and not pd.isna(last["volume"]) else None
+    vol_sma20_last = float(last["vol_sma20"]) if "vol_sma20" in last and not pd.isna(last["vol_sma20"]) else None
+    volume_ratio = None
+    if volume_last is not None and vol_sma20_last:
+        volume_ratio = float(volume_last / (vol_sma20_last + 1e-9))
 
     # structure bias heuristic from last classified pivots
     bias = "NEUTRAL"
@@ -105,10 +122,18 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "asof": str(last["date"].date()),
         "close": close,
         "atr14": atr_last,
-        "ma20": float(last["ma20"]) if not pd.isna(last["ma20"]) else None,
+        "ma20": ma20,
         "ma200": ma200,
         "above_ma200": above_ma200,
+        "above_ma20": above_ma20,
+        "ma20_above_ma200": ma20_above_ma200,
         "rsi14": rsi_last,
+        "macd_line": macd_line_last,
+        "macd_signal": macd_signal_last,
+        "macd_hist": macd_hist_last,
+        "volume": volume_last,
+        "volume_sma20": vol_sma20_last,
+        "volume_ratio": volume_ratio,
         "structure_bias": bias,
         "bos": bos,
         "ob": None if ob is None else {
@@ -119,6 +144,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
             "kind": fvg_pick.kind, "created_date": fvg_pick.created_date, "lower": fvg_pick.lower,
             "upper": fvg_pick.upper, "status": fvg_pick.status, "fill_ratio": fvg_pick.fill_ratio, "age": fvg_pick.age
         },
+        "fvg_active": fvg_pick is not None,
         "dist_to_ob_atr": dist_to_ob,
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,

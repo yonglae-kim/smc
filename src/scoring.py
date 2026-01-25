@@ -29,8 +29,18 @@ def score_candidate(ctx: Dict[str,Any], weights: Dict[str,float]) -> Dict[str,An
 
     # indicators
     add("above_ma200", ctx.get("above_ma200", False))
+    add("above_ma20", ctx.get("above_ma20", False))
+    add("ma20_above_ma200", ctx.get("ma20_above_ma200", False))
     rsi = ctx.get("rsi14")
     add("rsi_neutral", rsi is not None and 40 <= rsi <= 60, rsi)
+    add("rsi_bullish", rsi is not None and 50 <= rsi <= 70, rsi)
+    macd_line = ctx.get("macd_line")
+    macd_signal = ctx.get("macd_signal")
+    macd_hist = ctx.get("macd_hist")
+    add("macd_bullish", macd_hist is not None and macd_hist > 0, macd_hist)
+    add("macd_cross", macd_line is not None and macd_signal is not None and macd_line > macd_signal, macd_line)
+    volume_ratio = ctx.get("volume_ratio")
+    add("volume_surge", volume_ratio is not None and volume_ratio >= 1.3, volume_ratio)
 
     # RS + regime
     add("rs_strong", ctx.get("rs",{}).get("tag")=="RS_STRONG")
