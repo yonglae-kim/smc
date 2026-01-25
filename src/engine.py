@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 import numpy as np
 import pandas as pd
 
-from .analysis.indicators import sma, rsi, atr, macd
+from .analysis.indicators import sma, rsi, atr, macd, bollinger_bands
 from .analysis.smc.pivots import fractal_pivots, classify_structure
 from .analysis.smc.structure import bos_choch
 from .analysis.smc.fvg import detect_fvgs
@@ -20,6 +20,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     # indicators
     df["ma20"] = sma(df["close"], int(cfg.analysis.ma_fast))
     df["ma200"] = sma(df["close"], int(cfg.analysis.ma_slow))
+    df["ma60"] = sma(df["close"], int(getattr(cfg.analysis, "ma_mid", 60)))
+    df["ma120"] = sma(df["close"], int(getattr(cfg.analysis, "ma_long", 120)))
     df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
     df["atr14"] = atr(df, int(cfg.analysis.atr_period))
     df["atr50"] = atr(df, 50)
@@ -32,7 +34,17 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     df["momentum_20"] = df["close"].pct_change(20)
     df["momentum_60"] = df["close"].pct_change(60)
     df["ma20_slope_atr"] = (df["ma20"] - df["ma20"].shift(10)) / (df["atr14"] + 1e-9)
+    df["ma120_slope_atr"] = (df["ma120"] - df["ma120"].shift(20)) / (df["atr14"] + 1e-9)
     df["recent_high_20"] = df["high"].rolling(20, min_periods=20).max()
+    bb_mid, bb_upper, bb_lower, bb_width = bollinger_bands(
+        df["close"],
+        int(getattr(cfg.analysis, "bb_period", 20)),
+        float(getattr(cfg.analysis, "bb_k", 2.0)),
+    )
+    df["bb_mid"] = bb_mid
+    df["bb_upper"] = bb_upper
+    df["bb_lower"] = bb_lower
+    df["bb_width"] = bb_width
 
     last = df.iloc[-1]
     atr_last = float(last["atr14"]) if not pd.isna(last["atr14"]) else None
@@ -53,6 +65,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     close = float(last["close"])
     ma20 = float(last["ma20"]) if not pd.isna(last["ma20"]) else None
     ma200 = float(last["ma200"]) if not pd.isna(last["ma200"]) else None
+    ma60 = float(last["ma60"]) if not pd.isna(last["ma60"]) else None
+    ma120 = float(last["ma120"]) if not pd.isna(last["ma120"]) else None
     above_ma200 = (ma200 is not None) and (close >= ma200)
     above_ma20 = (ma20 is not None) and (close >= ma20)
     ma20_above_ma200 = (ma20 is not None and ma200 is not None) and (ma20 >= ma200)
@@ -68,13 +82,24 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     momentum_20 = float(last["momentum_20"]) if not pd.isna(last["momentum_20"]) else None
     momentum_60 = float(last["momentum_60"]) if not pd.isna(last["momentum_60"]) else None
     ma20_slope_atr = float(last["ma20_slope_atr"]) if not pd.isna(last["ma20_slope_atr"]) else None
+    ma120_slope_atr = float(last["ma120_slope_atr"]) if not pd.isna(last["ma120_slope_atr"]) else None
     recent_high_20 = float(last["recent_high_20"]) if not pd.isna(last["recent_high_20"]) else None
+    bb_width_last = float(last["bb_width"]) if not pd.isna(last["bb_width"]) else None
+    bb_upper_last = float(last["bb_upper"]) if not pd.isna(last["bb_upper"]) else None
+    bb_lower_last = float(last["bb_lower"]) if not pd.isna(last["bb_lower"]) else None
+    squeeze_lookback = int(getattr(cfg.analysis, "bb_squeeze_lookback", 20))
+    bb_width_min = None
+    if "bb_width" in df.columns and df["bb_width"].notna().any():
+        bb_width_min = float(df["bb_width"].tail(squeeze_lookback).min())
     room_to_high_atr = None
     if atr_last and recent_high_20 is not None:
         room_to_high_atr = float((recent_high_20 - close) / (atr_last + 1e-9))
     atr_ratio = None
     if atr_last and atr50_last:
         atr_ratio = float(atr_last / (atr50_last + 1e-9))
+    atr_pct = None
+    if atr_last and close:
+        atr_pct = float(atr_last / (close + 1e-9))
 
     # structure bias heuristic from last classified pivots
     bias = "NEUTRAL"
@@ -140,7 +165,10 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "atr14": atr_last,
         "atr50": atr50_last,
         "atr_ratio": atr_ratio,
+        "atr_pct": atr_pct,
         "ma20": ma20,
+        "ma60": ma60,
+        "ma120": ma120,
         "ma200": ma200,
         "above_ma200": above_ma200,
         "above_ma20": above_ma20,
@@ -155,8 +183,13 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "momentum_20": momentum_20,
         "momentum_60": momentum_60,
         "ma20_slope_atr": ma20_slope_atr,
+        "ma120_slope_atr": ma120_slope_atr,
         "room_to_high_atr": room_to_high_atr,
         "recent_high_20": recent_high_20,
+        "bb_upper": bb_upper_last,
+        "bb_lower": bb_lower_last,
+        "bb_width": bb_width_last,
+        "bb_width_min": bb_width_min,
         "structure_bias": bias,
         "bos": bos,
         "ob": None if ob is None else {

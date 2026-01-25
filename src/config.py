@@ -31,11 +31,16 @@ class AnalysisCfg(BaseModel):
     atr_period: int = 14
     rsi_period: int = 14
     ma_fast: int = 20
+    ma_mid: int = 60
+    ma_long: int = 120
     ma_slow: int = 200
     bos_buffer_atr: float = 0.2
     fvg_min_width_atr: float = 0.3
     ob_min_push_atr: float = 1.5
     max_zone_age_bars: int = 120
+    bb_period: int = 20
+    bb_k: float = 2.0
+    bb_squeeze_lookback: int = 20
 
 class ScoringCfg(BaseModel):
     weights: Dict[str, float]
@@ -73,6 +78,19 @@ class TradeCfg(BaseModel):
     exit_on_score_drop: bool = True
     tp_sl_conflict: str = "conservative"  # conservative | optimistic
     trail_atr_mult: float = 0.0
+    enable_trend_filter: bool = True
+    trend_ma_stack: bool = True
+    trend_slope_atr_min: float = 0.1
+    enable_volatility_filter: bool = True
+    max_atr_pct: float = 0.05
+    max_atr_ratio: float = 1.8
+    enable_volume_confirm: bool = True
+    min_volume_ratio: float = 1.4
+    enable_rs_rank: bool = True
+    rs_rank_min_pct: float = 0.7
+    enable_bb_squeeze_breakout: bool = True
+    bb_squeeze_max_width: float = 0.08
+    min_confirmations: int = 2
 
 
 class BacktestCfg(BaseModel):

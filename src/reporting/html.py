@@ -131,6 +131,7 @@ function filterTable(){
       <th>목표</th>
       <th>RR</th>
       <th>게이트</th>
+      <th>모듈</th>
     </tr>
   </thead>
   <tbody>
@@ -147,6 +148,11 @@ function filterTable(){
       <td>
         {% for g in b.gates %}
           <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
+        {% endfor %}
+      </td>
+      <td>
+        {% for m in b.modules %}
+          <span class="badge">{{ m }}</span>
         {% endfor %}
       </td>
     </tr>
@@ -242,6 +248,8 @@ function filterTable(){
       <pre>{{ c.gate_text }}</pre>
       <div style="font-weight:700;margin:10px 0 6px 0">점수 분해</div>
       <pre>{{ c.score_text }}</pre>
+      <div style="font-weight:700;margin:10px 0 6px 0">추가 분석 모듈</div>
+      <pre>{{ c.module_text }}</pre>
       <div style="font-weight:700;margin:10px 0 6px 0">진입 사유</div>
       <pre>{{ c.reason_text }}</pre>
       <div class="small" style="margin-top:10px">
