@@ -22,15 +22,21 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     df["ma200"] = sma(df["close"], int(cfg.analysis.ma_slow))
     df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
     df["atr14"] = atr(df, int(cfg.analysis.atr_period))
+    df["atr50"] = atr(df, 50)
     macd_line, macd_signal, macd_hist = macd(df["close"])
     df["macd_line"] = macd_line
     df["macd_signal"] = macd_signal
     df["macd_hist"] = macd_hist
     if "volume" in df.columns:
         df["vol_sma20"] = df["volume"].rolling(20, min_periods=20).mean()
+    df["momentum_20"] = df["close"].pct_change(20)
+    df["momentum_60"] = df["close"].pct_change(60)
+    df["ma20_slope_atr"] = (df["ma20"] - df["ma20"].shift(10)) / (df["atr14"] + 1e-9)
+    df["recent_high_20"] = df["high"].rolling(20, min_periods=20).max()
 
     last = df.iloc[-1]
     atr_last = float(last["atr14"]) if not pd.isna(last["atr14"]) else None
+    atr50_last = float(last["atr50"]) if not pd.isna(last["atr50"]) else None
 
     piv = fractal_pivots(df, int(cfg.analysis.fractal_n), df["atr14"])
     struct_pts = classify_structure(piv)
@@ -59,6 +65,16 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     volume_ratio = None
     if volume_last is not None and vol_sma20_last:
         volume_ratio = float(volume_last / (vol_sma20_last + 1e-9))
+    momentum_20 = float(last["momentum_20"]) if not pd.isna(last["momentum_20"]) else None
+    momentum_60 = float(last["momentum_60"]) if not pd.isna(last["momentum_60"]) else None
+    ma20_slope_atr = float(last["ma20_slope_atr"]) if not pd.isna(last["ma20_slope_atr"]) else None
+    recent_high_20 = float(last["recent_high_20"]) if not pd.isna(last["recent_high_20"]) else None
+    room_to_high_atr = None
+    if atr_last and recent_high_20 is not None:
+        room_to_high_atr = float((recent_high_20 - close) / (atr_last + 1e-9))
+    atr_ratio = None
+    if atr_last and atr50_last:
+        atr_ratio = float(atr_last / (atr50_last + 1e-9))
 
     # structure bias heuristic from last classified pivots
     bias = "NEUTRAL"
@@ -72,6 +88,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     dist_to_ob = None
     invalidation = None
     ob_status = None
+    ob_quality = None
+    ob_age = None
     if ob and atr_last and atr_last>0:
         # distance to nearest edge of zone
         if close < ob.lower:
@@ -83,9 +101,12 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         dist_to_ob = float(dist/(atr_last+1e-9))
         invalidation = float(ob.invalidation)
         ob_status = ob.status
+        ob_quality = float(ob.quality)
+        ob_age = int(ob.age)
 
     dist_to_fvg = None
     fvg_status = None
+    fvg_age = None
     if fvg_pick and atr_last and atr_last>0:
         lower, upper = fvg_pick.lower, fvg_pick.upper
         if close < lower:
@@ -96,6 +117,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
             dist = 0.0
         dist_to_fvg = float(dist/(atr_last+1e-9))
         fvg_status = fvg_pick.status
+        fvg_age = int(fvg_pick.age)
 
     # Confluence: OB and FVG overlap/near
     confluence = False
@@ -122,6 +144,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "asof": str(last["date"].date()),
         "close": close,
         "atr14": atr_last,
+        "atr50": atr50_last,
+        "atr_ratio": atr_ratio,
         "ma20": ma20,
         "ma200": ma200,
         "above_ma200": above_ma200,
@@ -134,17 +158,24 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "volume": volume_last,
         "volume_sma20": vol_sma20_last,
         "volume_ratio": volume_ratio,
+        "momentum_20": momentum_20,
+        "momentum_60": momentum_60,
+        "ma20_slope_atr": ma20_slope_atr,
+        "room_to_high_atr": room_to_high_atr,
         "structure_bias": bias,
         "bos": bos,
         "ob": None if ob is None else {
             "kind": ob.kind, "date": ob.date, "lower": ob.lower, "upper": ob.upper,
-            "invalidation": ob.invalidation, "status": ob.status, "quality": ob.quality
+            "invalidation": ob.invalidation, "status": ob.status, "quality": ob.quality, "age": ob.age
         },
+        "ob_quality": ob_quality,
+        "ob_age": ob_age,
         "fvg": None if fvg_pick is None else {
             "kind": fvg_pick.kind, "created_date": fvg_pick.created_date, "lower": fvg_pick.lower,
             "upper": fvg_pick.upper, "status": fvg_pick.status, "fill_ratio": fvg_pick.fill_ratio, "age": fvg_pick.age
         },
         "fvg_active": fvg_pick is not None,
+        "fvg_age": fvg_age,
         "dist_to_ob_atr": dist_to_ob,
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,
