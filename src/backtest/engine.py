@@ -103,6 +103,7 @@ def run_backtest(
     if tp_partial_rr >= tp_rr_target or tp_partial_size <= 0:
         tp_partial_rr = 0.0
         tp_partial_size = 0.0
+    stop_grace_days = int(getattr(cfg.backtest, "stop_grace_days", 0))
 
     prog = Progress(total=len(cal), label="SimDays", every=25)
     day_i = 0
@@ -142,9 +143,10 @@ def run_backtest(
             low_px = float(row["low"])
             high_px = float(row["high"])
 
-            if low_px <= pos.stop_px:
-                to_close.append((sym, pos.stop_px, "STOP"))
-                continue
+            if stop_grace_days <= 0 or pos.hold >= stop_grace_days:
+                if low_px <= pos.stop_px:
+                    to_close.append((sym, pos.stop_px, "STOP"))
+                    continue
 
             if not pos.took_partial and pos.tp1_size > 0 and high_px >= pos.tp1_px:
                 partial_closes.append((sym, pos.tp1_px, "TP1", pos.tp1_size))

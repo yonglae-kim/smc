@@ -63,8 +63,9 @@ backtest:
   slippage_bps: 5
   max_positions: 10
   risk_per_trade: 0.01
+  stop_grace_days: 15
   strategy_params:
-    threshold: 3.0
+    threshold: 4.0
     min_room_to_high_atr: 0.75
     room_to_high_levels: [[1.5, 0.75], [2.5, 1.5], [4.0, 2.5]]
     w_momentum_20: 0.75
@@ -84,6 +85,8 @@ backtest:
     w_ob_age_old: -0.5
     fvg_age_max: 60
     w_fvg_age_old: -0.5
+    require_tailwind: true
+    require_above_ma200: true
   tp:
     rr_target: 2.0
     partial_rr: 1.0
