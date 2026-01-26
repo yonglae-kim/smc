@@ -15,7 +15,6 @@ class TradeSignal:
     reasons: List[str]
     gates: Dict[str, bool]
     score_breakdown: Dict[str, float]
-    modules: Dict[str, Any] = field(default_factory=dict)
     invalidation: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -25,7 +24,7 @@ class TradeSignal:
 @dataclass
 class EntryPlan:
     entry_type: str
-    entry_type_label: str
+    entry_type_label: str = ""
     entry_price: float
     stop_loss: float
     take_profit: float

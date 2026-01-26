@@ -45,19 +45,6 @@ class TradeRules:
         self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
-        self.enable_trend_filter = bool(getattr(trade, "enable_trend_filter", True))
-        self.trend_ma_stack = bool(getattr(trade, "trend_ma_stack", True))
-        self.trend_slope_atr_min = float(getattr(trade, "trend_slope_atr_min", 0.1))
-        self.enable_volatility_filter = bool(getattr(trade, "enable_volatility_filter", True))
-        self.max_atr_pct = float(getattr(trade, "max_atr_pct", 0.05))
-        self.max_atr_ratio = float(getattr(trade, "max_atr_ratio", 1.8))
-        self.enable_volume_confirm = bool(getattr(trade, "enable_volume_confirm", True))
-        self.min_volume_ratio = float(getattr(trade, "min_volume_ratio", 1.4))
-        self.enable_rs_rank = bool(getattr(trade, "enable_rs_rank", True))
-        self.rs_rank_min_pct = float(getattr(trade, "rs_rank_min_pct", 0.7))
-        self.enable_bb_squeeze_breakout = bool(getattr(trade, "enable_bb_squeeze_breakout", True))
-        self.bb_squeeze_max_width = float(getattr(trade, "bb_squeeze_max_width", 0.08))
-        self.min_confirmations = int(getattr(trade, "min_confirmations", 0))
 
     def next_trading_day(self, calendar: Iterable[pd.Timestamp], date: str) -> str:
         if not calendar:
@@ -145,25 +132,9 @@ class TradeRules:
         gates["score_min"] = score >= min_score
         gates["min_rr"] = entry_plan.rr >= self.min_rr
         gates["min_expected_return"] = entry_plan.expected_return >= self.min_expected_return
-        trend_ok = self._trend_ok(ctx)
-        vol_ok = self._volatility_ok(ctx)
-        volume_ok = self._volume_confirm(ctx)
-        modules = self._module_checks(ctx, volume_ok)
-        if self.enable_trend_filter:
-            gates["trend_filter"] = trend_ok
-        if self.enable_volatility_filter:
-            gates["volatility_filter"] = vol_ok
-        if self.enable_volume_confirm:
-            gates["volume_confirm"] = volume_ok
-        for key, result in modules.items():
-            if result["enabled"]:
-                gates[key] = bool(result["pass"])
-        confirmations = self._count_confirmations(modules, volume_ok)
-        if self.min_confirmations > 0:
-            gates["min_confirmations"] = confirmations >= self.min_confirmations
         all_pass = all(gates.values()) if gates else False
         confidence = min(1.0, score / max(min_score * 2.0, 1e-6)) if min_score > 0 else 0.0
-        reasons = self._build_buy_reasons(ctx, eval_result, entry_plan, all_pass, modules, confirmations)
+        reasons = self._build_buy_reasons(ctx, eval_result, entry_plan, all_pass)
         valid_from = self.next_trading_day(calendar, date)
         signal = TradeSignal(
             timestamp=date,
@@ -175,7 +146,6 @@ class TradeRules:
             reasons=reasons,
             gates=gates,
             score_breakdown=eval_result.get("breakdown", {}),
-            modules=modules,
             invalidation=entry_plan.invalidation,
         )
         return signal, entry_plan
@@ -310,15 +280,6 @@ class TradeRules:
             return decisions
 
         if ctx is not None:
-            if self._ma_slope_sell_gate(ctx):
-                decisions.append(
-                    ExitDecision(
-                        action="EXIT",
-                        reason=self._ma_slope_sell_reason(ctx),
-                        price=close_px,
-                    )
-                )
-                return decisions
             if self.exit_on_structure_break:
                 bos_dir = (ctx.get("bos") or {}).get("direction")
                 if ctx.get("structure_bias") == "BEAR" or bos_dir == "DOWN":
@@ -346,35 +307,10 @@ class TradeRules:
         eval_result: Dict[str, Any],
         entry_plan: EntryPlan,
         all_pass: bool,
-        modules: Dict[str, Dict[str, Any]],
-        confirmations: int,
     ) -> List[str]:
         reasons = []
         if not all_pass:
             reasons.append("게이트 조건 일부 미달(상세는 게이트 표 참고).")
-        if self.enable_trend_filter:
-            reasons.append(
-                "추세 필터: MA 정배열/기울기 확인으로 추세 구간만 선별."
-                if self._trend_ok(ctx)
-                else "추세 필터: 정배열/기울기 조건 미달."
-            )
-        if self.enable_volatility_filter:
-            reasons.append(
-                "변동성 필터: 과도한 ATR 구간 제외로 노이즈 축소."
-                if self._volatility_ok(ctx)
-                else "변동성 필터: ATR 비율 조건 미달."
-            )
-        if self.enable_volume_confirm:
-            reasons.append(
-                "거래량 확인: 평균 대비 거래량 급증 구간만 통과."
-                if self._volume_confirm(ctx)
-                else "거래량 확인: 평균 대비 거래량 부족."
-            )
-        ma_gate = ctx.get("ma_slope_gate") or {}
-        for line in ma_gate.get("buy_reasons") or []:
-            reasons.append(line)
-        if self.min_confirmations > 0:
-            reasons.append(f"추가 모듈 확인 {confirmations}건 충족(최소 {self.min_confirmations}).")
         if ctx.get("structure_bias") == "BULL":
             reasons.append("구조 바이어스: 상승(HH/HL 구조).")
         if ctx.get("tag_confluence_ob_fvg"):
@@ -385,13 +321,6 @@ class TradeRules:
         regime_tag = (ctx.get("regime") or {}).get("tag")
         if regime_tag == "TAILWIND":
             reasons.append("시장 레짐 우호(상승/완만 변동성 구간).")
-        for key, result in modules.items():
-            if not result.get("enabled"):
-                continue
-            label = result.get("label", key)
-            status = "충족" if result.get("pass") else "미충족"
-            detail = result.get("detail", "")
-            reasons.append(f"{label}: {status}. {detail}".strip())
         entry_type_map = {
             "limit_pullback": "되돌림 지정가",
             "limit_in_zone": "구간 내부 지정가",
@@ -405,80 +334,6 @@ class TradeRules:
             f"손절 {entry_plan.stop_loss:.0f} · 목표 {entry_plan.take_profit:.0f}."
         )
         return reasons
-
-    def _trend_ok(self, ctx: Dict[str, Any]) -> bool:
-        ma20 = ctx.get("ma20")
-        ma60 = ctx.get("ma60")
-        ma120 = ctx.get("ma120")
-        ma120_slope_atr = ctx.get("ma120_slope_atr")
-        if ma20 is None or ma60 is None or ma120 is None or ma120_slope_atr is None:
-            return False
-        stack_ok = (ma20 >= ma60 >= ma120) if self.trend_ma_stack else True
-        slope_ok = ma120_slope_atr >= self.trend_slope_atr_min
-        return bool(stack_ok and slope_ok)
-
-    def _volatility_ok(self, ctx: Dict[str, Any]) -> bool:
-        atr_pct = ctx.get("atr_pct")
-        atr_ratio = ctx.get("atr_ratio")
-        if atr_pct is None or atr_ratio is None:
-            return False
-        return bool(atr_pct <= self.max_atr_pct and atr_ratio <= self.max_atr_ratio)
-
-    def _volume_confirm(self, ctx: Dict[str, Any]) -> bool:
-        volume_ratio = ctx.get("volume_ratio")
-        if volume_ratio is None:
-            return False
-        return bool(volume_ratio >= self.min_volume_ratio)
-
-    def _ma_slope_sell_gate(self, ctx: Dict[str, Any]) -> bool:
-        gate = ctx.get("ma_slope_gate") or {}
-        if not gate.get("enabled", False):
-            return False
-        return bool(gate.get("sell_pass"))
-
-    def _ma_slope_sell_reason(self, ctx: Dict[str, Any]) -> str:
-        gate = ctx.get("ma_slope_gate") or {}
-        reasons = gate.get("sell_reasons") or []
-        if reasons:
-            return "MA 기울기 매도 게이트 충족: " + " / ".join(reasons)
-        return "MA 기울기 매도 게이트 충족"
-
-    def _module_checks(self, ctx: Dict[str, Any], volume_ok: bool) -> Dict[str, Dict[str, Any]]:
-        results: Dict[str, Dict[str, Any]] = {}
-        rs_rank = ctx.get("rs_rank_pct")
-        rs_pass = rs_rank is not None and rs_rank >= self.rs_rank_min_pct
-        results["module_rs_rank"] = {
-            "enabled": self.enable_rs_rank,
-            "pass": bool(rs_pass),
-            "label": "상대강도 랭킹",
-            "detail": f"랭킹 {rs_rank:.0%} (최소 {self.rs_rank_min_pct:.0%})" if rs_rank is not None else "랭킹 데이터 없음",
-        }
-        bb_width_min = ctx.get("bb_width_min")
-        bb_upper = ctx.get("bb_upper")
-        close = ctx.get("close")
-        squeeze_ok = bb_width_min is not None and bb_width_min <= self.bb_squeeze_max_width
-        breakout_ok = bb_upper is not None and close is not None and close > bb_upper
-        bb_pass = bool(squeeze_ok and breakout_ok and volume_ok)
-        results["module_bb_squeeze"] = {
-            "enabled": self.enable_bb_squeeze_breakout,
-            "pass": bb_pass,
-            "label": "BB 수축 후 돌파",
-            "detail": (
-                f"수축폭 {bb_width_min:.2%} / 임계 {self.bb_squeeze_max_width:.2%}, 상단 돌파={breakout_ok}, 거래량={volume_ok}"
-                if bb_width_min is not None
-                else "밴드 폭 데이터 없음"
-            ),
-        }
-        return results
-
-    def _count_confirmations(self, modules: Dict[str, Dict[str, Any]], volume_ok: bool) -> int:
-        count = 0
-        if self.enable_volume_confirm and volume_ok:
-            count += 1
-        for result in modules.values():
-            if result.get("enabled") and result.get("pass"):
-                count += 1
-        return count
 
     def build_sell_reasons(self, exit_decisions: List[ExitDecision], position: Position, ctx: Dict[str, Any]) -> List[str]:
         reasons = []
@@ -526,16 +381,4 @@ class TradeRules:
         for key, val in breakdown.items():
             desc = descriptions.get(key, key)
             lines.append(f"{key}: {val:.2f} · {desc}")
-        return lines
-
-    def describe_modules(self, modules: Dict[str, Dict[str, Any]]) -> List[str]:
-        lines = []
-        for key, info in modules.items():
-            label = info.get("label", key)
-            if not info.get("enabled"):
-                lines.append(f"{label}: OFF")
-                continue
-            status = "통과" if info.get("pass") else "실패"
-            detail = info.get("detail", "")
-            lines.append(f"{label}: {status} · {detail}".strip())
         return lines

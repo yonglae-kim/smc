@@ -23,16 +23,11 @@ analysis:
   atr_period: 14
   rsi_period: 14
   ma_fast: 20
-  ma_mid: 60
-  ma_long: 120
   ma_slow: 200
   bos_buffer_atr: 0.2
   fvg_min_width_atr: 0.3
   ob_min_push_atr: 1.5
   max_zone_age_bars: 120
-  bb_period: 20
-  bb_k: 2.0
-  bb_squeeze_lookback: 20
 scoring:
   weights:
     structure_bull: 12
@@ -69,9 +64,9 @@ trade:
   execution_delay_days: 1
   entry_price_mode: next_open
   force_top_k: 0
-  min_score: 3.0
-  min_expected_return: 0.015
-  min_rr: 1.3
+  min_score: 4.0
+  min_expected_return: 0.02
+  min_rr: 1.5
   min_risk_ratio: 0.001
   stop_atr_mult: 1.5
   tp_rr_target: 2.0
@@ -84,19 +79,6 @@ trade:
   exit_on_score_drop: true
   tp_sl_conflict: conservative
   trail_atr_mult: 0.0
-  enable_trend_filter: true
-  trend_ma_stack: true
-  trend_slope_atr_min: 0.05
-  enable_volatility_filter: true
-  max_atr_pct: 0.06
-  max_atr_ratio: 1.8
-  enable_volume_confirm: true
-  min_volume_ratio: 1.2
-  enable_rs_rank: true
-  rs_rank_min_pct: 0.6
-  enable_bb_squeeze_breakout: true
-  bb_squeeze_max_width: 0.1
-  min_confirmations: 1
 backtest:
   start: '2025-01-01'
   end: '2025-12-31'
@@ -105,8 +87,9 @@ backtest:
   slippage_bps: 5
   max_positions: 10
   risk_per_trade: 0.01
+  stop_grace_days: 15
   strategy_params:
-    threshold: 3.0
+    threshold: 4.0
     min_room_to_high_atr: 0.75
     room_to_high_levels: [[1.5, 0.75], [2.5, 1.5], [4.0, 2.5]]
     w_momentum_20: 0.75
@@ -126,21 +109,14 @@ backtest:
     w_ob_age_old: -0.5
     fvg_age_max: 60
     w_fvg_age_old: -0.5
-    ma_slope_gate:
-      enabled: true
-      ma_fast: 20
-      ma_slow: 200
-      slope_window: 5
-      buy_slope_threshold: 0.015
-      sell_slope_threshold: -0.015
-      require_close_confirm_for_buy: true
-      require_close_confirm_for_sell: true
+    require_tailwind: true
+    require_above_ma200: true
   tp:
     rr_target: 2.0
     partial_rr: 1.0
     partial_size: 0.5
     move_stop_to_entry: true
-  strategy: tight_winrate
+  strategy: ob_pullback
   symbols: ["005930","000660","035420","051910","035720"] # TOP500
 #  symbols: TOP500
   warmup_bars: 260
