@@ -167,7 +167,8 @@ def run(config_path: str) -> None:
         table_rows.append({
             "rank": rank, "score": c.get("score",0.0), "symbol": c["symbol"], "name": c.get("name",""),
             "market": c.get("market",""), "tags": c.get("tags",[]), "close": c.get("close",0.0),
-            "ma200": c.get("ma200"), "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
+            "ma20": c.get("ma20"), "ma200": c.get("ma200"), "ma_slope_pct": c.get("ma_slope_pct"),
+            "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
         })
 
     signal_map = {r["signal"].symbol: r for r in signal_rows}

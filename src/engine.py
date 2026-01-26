@@ -10,6 +10,7 @@ from .analysis.smc.fvg import detect_fvgs
 from .analysis.smc.ob import detect_ob_from_bos
 from .regime.regime import relative_strength
 from .scoring import score_candidate
+from .signals.ma_slope_gate import compute_ma_slope_metrics, evaluate_ma_slope_gate, normalize_ma_slope_gate_config
 
 def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.DataFrame, cfg) -> Optional[Dict[str,Any]]:
     """Compute features + SMC context. Returns context dict suitable for scoring/report."""
@@ -83,6 +84,31 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     momentum_60 = float(last["momentum_60"]) if not pd.isna(last["momentum_60"]) else None
     ma20_slope_atr = float(last["ma20_slope_atr"]) if not pd.isna(last["ma20_slope_atr"]) else None
     ma120_slope_atr = float(last["ma120_slope_atr"]) if not pd.isna(last["ma120_slope_atr"]) else None
+    gate_cfg = normalize_ma_slope_gate_config(
+        (getattr(cfg.backtest, "strategy_params", {}) or {}).get("ma_slope_gate", {})
+    )
+    ma_gate_metrics = compute_ma_slope_metrics(
+        df["close"],
+        ma_fast=int(gate_cfg["ma_fast"]),
+        ma_slow=int(gate_cfg["ma_slow"]),
+        slope_window=int(gate_cfg["slope_window"]),
+    )
+    buy_pass, buy_reasons, buy_metrics = evaluate_ma_slope_gate(
+        ma_gate_metrics,
+        "buy",
+        buy_slope_threshold=float(gate_cfg["buy_slope_threshold"]),
+        sell_slope_threshold=float(gate_cfg["sell_slope_threshold"]),
+        require_close_confirm_for_buy=bool(gate_cfg["require_close_confirm_for_buy"]),
+        require_close_confirm_for_sell=bool(gate_cfg["require_close_confirm_for_sell"]),
+    )
+    sell_pass, sell_reasons, sell_metrics = evaluate_ma_slope_gate(
+        ma_gate_metrics,
+        "sell",
+        buy_slope_threshold=float(gate_cfg["buy_slope_threshold"]),
+        sell_slope_threshold=float(gate_cfg["sell_slope_threshold"]),
+        require_close_confirm_for_buy=bool(gate_cfg["require_close_confirm_for_buy"]),
+        require_close_confirm_for_sell=bool(gate_cfg["require_close_confirm_for_sell"]),
+    )
     recent_high_20 = float(last["recent_high_20"]) if not pd.isna(last["recent_high_20"]) else None
     bb_width_last = float(last["bb_width"]) if not pd.isna(last["bb_width"]) else None
     bb_upper_last = float(last["bb_upper"]) if not pd.isna(last["bb_upper"]) else None
@@ -173,6 +199,9 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "above_ma200": above_ma200,
         "above_ma20": above_ma20,
         "ma20_above_ma200": ma20_above_ma200,
+        "ma_slope_pct": buy_metrics.get("slope_pct"),
+        "ma_slope_fast": buy_metrics.get("ma_fast"),
+        "ma_slope_slow": buy_metrics.get("ma_slow"),
         "rsi14": rsi_last,
         "macd_line": macd_line_last,
         "macd_signal": macd_signal_last,
@@ -207,6 +236,16 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "dist_to_ob_atr": dist_to_ob,
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,
+        "ma_slope_gate": {
+            "enabled": bool(gate_cfg.get("enabled", True)),
+            "buy_pass": bool(buy_pass),
+            "sell_pass": bool(sell_pass),
+            "buy_reasons": buy_reasons,
+            "sell_reasons": sell_reasons,
+            "buy_metrics": buy_metrics,
+            "sell_metrics": sell_metrics,
+            "params": gate_cfg,
+        },
         "rs": rs,
         "pivots": [{"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength} for p in piv[-40:]],
         "structure_points": struct_pts[-20:],

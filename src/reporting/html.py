@@ -94,8 +94,10 @@ function filterTable(){
       <th>시장</th>
       <th>태그</th>
       <th onclick="sortTable(6)">종가</th>
-      <th onclick="sortTable(7)">MA200</th>
-      <th onclick="sortTable(8)">RSI</th>
+      <th onclick="sortTable(7)">MA20</th>
+      <th onclick="sortTable(8)">MA200</th>
+      <th onclick="sortTable(9)">Slope20</th>
+      <th onclick="sortTable(10)">RSI</th>
       <th>레벨</th>
     </tr>
   </thead>
@@ -109,8 +111,10 @@ function filterTable(){
       <td>{{ r.market }}</td>
       <td>{{ r.tags|join(", ") }}</td>
       <td data-sort="{{ r.close }}">{{ "%.0f"|format(r.close) }}</td>
-      <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 else "" }}</td>
-      <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 else "" }}</td>
+      <td data-sort="{{ r.ma20 or 0 }}">{{ "%.0f"|format(r.ma20) if r.ma20 is not none else "" }}</td>
+      <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 is not none else "" }}</td>
+      <td data-sort="{{ r.ma_slope_pct or 0 }}">{{ "%.2f"|format(r.ma_slope_pct * 100) if r.ma_slope_pct is not none else "" }}%</td>
+      <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 is not none else "" }}</td>
       <td>{{ r.levels }}</td>
     </tr>
   {% endfor %}
