@@ -199,6 +199,14 @@ class TradeRules:
             "score_exit_threshold": self.score_exit_threshold,
             "exit_on_structure_break": self.exit_on_structure_break,
             "exit_on_score_drop": self.exit_on_score_drop,
+            "exit_on_momentum_fade": self.exit_on_momentum_fade,
+            "momentum_exit_days": self.momentum_exit_days,
+            "momentum_exit_rsi_threshold": self.momentum_exit_rsi_threshold,
+            "momentum_exit_macd_threshold": self.momentum_exit_macd_threshold,
+            "exit_on_ma20_trend_break": self.exit_on_ma20_trend_break,
+            "tp1_risk_reduction": self.tp1_risk_reduction,
+            "tp1_trail_atr_mult": self.tp1_trail_atr_mult,
+            "tp1_stop_atr_buffer": self.tp1_stop_atr_buffer,
             "tp_sl_conflict": self.tp_sl_conflict,
         }
         tp1_price = None
