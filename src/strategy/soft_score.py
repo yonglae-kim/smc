@@ -44,6 +44,7 @@ class SoftScoreStrategy(Strategy):
         self.volume_ratio_threshold = float(p.get("volume_ratio_threshold", 1.3))
         self.min_room_to_high_atr = float(p.get("min_room_to_high_atr", 0.75))
         self.room_to_high_levels = p.get("room_to_high_levels", [(1.5, 0.75), (2.5, 1.5), (4.0, 2.5)])
+        self.require_room_to_high = bool(p.get("require_room_to_high", False))
         self.w_momentum_20 = float(p.get("w_momentum_20", 0.75))
         self.w_momentum_60 = float(p.get("w_momentum_60", 1.5))
         self.w_momentum_60_negative = float(p.get("w_momentum_60_negative", -1.5))
@@ -80,7 +81,9 @@ class SoftScoreStrategy(Strategy):
         gates["invalidation_available"] = invalidation is not None or ctx.get("atr14") is not None
 
         room_to_high_atr = ctx.get("room_to_high_atr")
-        gates["room_to_high"] = room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
+        gates["room_to_high"] = (not self.require_room_to_high) or (
+            room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
+        )
 
         regime = (ctx.get("regime") or {})
         rtag = regime.get("tag")
