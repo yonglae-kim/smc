@@ -71,8 +71,16 @@ class TradeCfg(BaseModel):
     score_exit_threshold: float = 2.0
     exit_on_structure_break: bool = True
     exit_on_score_drop: bool = True
+    exit_on_momentum_fade: bool = True
+    momentum_exit_days: int = 3
+    momentum_exit_rsi_threshold: float = 45.0
+    momentum_exit_macd_threshold: float = 0.0
+    exit_on_ma20_trend_break: bool = True
     tp_sl_conflict: str = "conservative"  # conservative | optimistic
     trail_atr_mult: float = 0.0
+    tp1_risk_reduction: bool = True
+    tp1_trail_atr_mult: float = 0.8
+    tp1_stop_atr_buffer: float = 0.25
 
 
 class BacktestCfg(BaseModel):

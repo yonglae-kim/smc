@@ -150,14 +150,14 @@ def run_backtest(
 
             for d in exit_decisions:
                 if d.action == "PARTIAL" and d.size:
-                    partial_closes.append((sym, d.price, "TP1", d.size))
+                    partial_closes.append((sym, d.price, "TP1", d.size, ctx))
                 if d.action == "EXIT":
                     to_close.append((sym, d.price, d.reason))
                     break
 
             pos.hold_days += 1
 
-        for sym, exit_px, why, size_to_close in partial_closes:
+        for sym, exit_px, why, size_to_close, ctx in partial_closes:
             pos = positions.get(sym)
             if pos is None:
                 continue
@@ -168,6 +168,7 @@ def run_backtest(
             pos.took_partial = True
             if trade_rules.move_stop_to_entry and pos.stop_loss < pos.entry_price:
                 pos.stop_loss = pos.entry_price
+            trade_rules.apply_tp1_risk_reduction(pos, ctx)
             if pos.remaining_size <= 0:
                 positions.pop(sym, None)
             trades.append(

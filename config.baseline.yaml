@@ -82,8 +82,16 @@ trade:
   score_exit_threshold: 2.0
   exit_on_structure_break: true
   exit_on_score_drop: true
+  exit_on_momentum_fade: true
+  momentum_exit_days: 3
+  momentum_exit_rsi_threshold: 45.0
+  momentum_exit_macd_threshold: 0.0
+  exit_on_ma20_trend_break: true
   tp_sl_conflict: conservative
   trail_atr_mult: 0.0
+  tp1_risk_reduction: true
+  tp1_trail_atr_mult: 0.8
+  tp1_stop_atr_buffer: 0.25
   enable_trend_filter: false
   trend_ma_stack: true
   trend_slope_atr_min: 0.0

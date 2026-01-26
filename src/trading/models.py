@@ -69,6 +69,7 @@ class Position:
     tp1_price: Optional[float] = None
     tp1_size: float = 0.0
     took_partial: bool = False
+    weak_momentum_days: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

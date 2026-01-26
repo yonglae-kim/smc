@@ -44,8 +44,16 @@ class TradeRules:
         self.score_exit_threshold = float(getattr(trade, "score_exit_threshold", 0.0))
         self.exit_on_structure_break = bool(getattr(trade, "exit_on_structure_break", True))
         self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
+        self.exit_on_momentum_fade = bool(getattr(trade, "exit_on_momentum_fade", True))
+        self.momentum_exit_days = int(getattr(trade, "momentum_exit_days", 3))
+        self.momentum_exit_rsi_threshold = float(getattr(trade, "momentum_exit_rsi_threshold", 45.0))
+        self.momentum_exit_macd_threshold = float(getattr(trade, "momentum_exit_macd_threshold", 0.0))
+        self.exit_on_ma20_trend_break = bool(getattr(trade, "exit_on_ma20_trend_break", True))
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
+        self.tp1_risk_reduction = bool(getattr(trade, "tp1_risk_reduction", True))
+        self.tp1_trail_atr_mult = float(getattr(trade, "tp1_trail_atr_mult", 0.8))
+        self.tp1_stop_atr_buffer = float(getattr(trade, "tp1_stop_atr_buffer", 0.25))
         strategy_params = getattr(cfg.backtest, "strategy_params", {}) or {}
         self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(strategy_params.get("ma_slope_gate"))
         self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
@@ -229,6 +237,17 @@ class TradeRules:
         if new_stop > position.stop_loss:
             position.stop_loss = new_stop
 
+    def apply_tp1_risk_reduction(self, position: Position, ctx: Optional[Dict[str, Any]]) -> None:
+        if not self.tp1_risk_reduction:
+            return
+        if self.tp1_trail_atr_mult > 0 and (position.trail is None or position.trail <= 0):
+            position.trail = self.tp1_trail_atr_mult
+        atr = _safe_float((ctx or {}).get("atr14"), 0.0)
+        if atr > 0 and self.tp1_stop_atr_buffer > 0:
+            target_stop = position.entry_price + atr * self.tp1_stop_atr_buffer
+            if target_stop > position.stop_loss:
+                position.stop_loss = target_stop
+
     def evaluate_exit(
         self,
         position: Position,
@@ -302,6 +321,50 @@ class TradeRules:
                     )
                 )
                 return decisions
+
+        if ctx is not None:
+            if self.exit_on_momentum_fade and self.momentum_exit_days > 0:
+                rsi14 = ctx.get("rsi14")
+                macd_hist = ctx.get("macd_hist")
+                has_signal = False
+                weak_signal = False
+                if rsi14 is not None:
+                    has_signal = True
+                    weak_signal = weak_signal or float(rsi14) < self.momentum_exit_rsi_threshold
+                if macd_hist is not None:
+                    has_signal = True
+                    weak_signal = weak_signal or float(macd_hist) < self.momentum_exit_macd_threshold
+                if has_signal and weak_signal:
+                    position.weak_momentum_days += 1
+                else:
+                    position.weak_momentum_days = 0
+                if has_signal and position.weak_momentum_days >= self.momentum_exit_days:
+                    decisions.append(
+                        ExitDecision(
+                            action="EXIT",
+                            reason=(
+                                f"모멘텀 약화 {self.momentum_exit_days}일 연속"
+                                f"(RSI<{self.momentum_exit_rsi_threshold:.0f} 또는 MACD 히스토그램<"
+                                f"{self.momentum_exit_macd_threshold:.2f})"
+                            ),
+                            price=close_px,
+                        )
+                    )
+                    return decisions
+
+            if self.exit_on_ma20_trend_break:
+                ma20 = ctx.get("ma20")
+                ma20_slope_atr = ctx.get("ma20_slope_atr")
+                if ma20 is not None and ma20_slope_atr is not None:
+                    if close_px < float(ma20) and float(ma20_slope_atr) < 0:
+                        decisions.append(
+                            ExitDecision(
+                                action="EXIT",
+                                reason="MA20 하회 + MA20 기울기 약세(ATR 기준) 조기 청산",
+                                price=close_px,
+                            )
+                        )
+                        return decisions
 
         if position.hold_days >= self.max_hold_days:
             decisions.append(ExitDecision(action="EXIT", reason=f"보유기간 만료({self.max_hold_days}일)", price=close_px))
