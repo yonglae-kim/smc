@@ -116,6 +116,9 @@ def run_backtest(
             close_px = float(row["close"])
             low_px = float(row["low"])
             high_px = float(row["high"])
+            if pos.entry_price > 0:
+                pos.mae = min(pos.mae, low_px - pos.entry_price)
+                pos.mfe = max(pos.mfe, high_px - pos.entry_price)
             ctx = None
             if trade_rules.exit_on_structure_break or trade_rules.exit_on_score_drop or trade_rules.trail_atr_mult > 0:
                 meta = next((m for m in symbols_meta if m["symbol"] == sym), None)
@@ -163,6 +166,8 @@ def run_backtest(
                 continue
             exit_px_costed = exit_px * (1.0 - (fee_bps + slippage_bps) / 10000.0)
             pnl = (exit_px_costed - pos.entry_price) * size_to_close
+            risk_per_share = pos.entry_price - (pos.entry_stop_loss or pos.stop_loss)
+            rr_realized = (exit_px_costed - pos.entry_price) / risk_per_share if risk_per_share > 0 else None
             equity += pnl
             pos.remaining_size = max(0.0, pos.remaining_size - size_to_close)
             pos.took_partial = True
@@ -184,6 +189,13 @@ def run_backtest(
                     "entry_reason": pos.exit_rules.get("entry_reason", ""),
                     "entry_score": pos.entry_score,
                     "entry_breakdown": pos.entry_breakdown or {},
+                    "hold_days": pos.hold_days,
+                    "stop_distance_atr": pos.stop_distance_atr,
+                    "rr_realized": rr_realized,
+                    "entry_regime_tag": pos.entry_regime_tag,
+                    "entry_structure_bias": pos.entry_structure_bias,
+                    "mae": pos.mae,
+                    "mfe": pos.mfe,
                 }
             )
             stats["exited"] += 1
@@ -197,6 +209,8 @@ def run_backtest(
                 continue
             exit_px_costed = exit_px * (1.0 - (fee_bps + slippage_bps) / 10000.0)
             pnl = (exit_px_costed - pos.entry_price) * size_to_close
+            risk_per_share = pos.entry_price - (pos.entry_stop_loss or pos.stop_loss)
+            rr_realized = (exit_px_costed - pos.entry_price) / risk_per_share if risk_per_share > 0 else None
             equity += pnl
             trades.append(
                 {
@@ -212,6 +226,13 @@ def run_backtest(
                     "entry_reason": pos.exit_rules.get("entry_reason", ""),
                     "entry_score": pos.entry_score,
                     "entry_breakdown": pos.entry_breakdown or {},
+                    "hold_days": pos.hold_days,
+                    "stop_distance_atr": pos.stop_distance_atr,
+                    "rr_realized": rr_realized,
+                    "entry_regime_tag": pos.entry_regime_tag,
+                    "entry_structure_bias": pos.entry_structure_bias,
+                    "mae": pos.mae,
+                    "mfe": pos.mfe,
                 }
             )
             stats["exited"] += 1

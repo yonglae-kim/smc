@@ -19,6 +19,10 @@ th{background:#fafafa}
 .small{color:#666;font-size:12px}
 tbody tr:nth-child(even){background:#fcfcff}
 ul{margin:0;padding-left:16px}
+details summary{cursor:pointer;color:#333}
+.detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.detail-card{border:1px solid #eee;border-radius:10px;padding:10px;background:#fff}
+.tag{display:inline-block;padding:2px 6px;border-radius:999px;background:#f3f3f3;font-size:11px;margin-right:4px}
 </style>
 </head>
 <body>
@@ -33,13 +37,40 @@ ul{margin:0;padding-left:16px}
 <div class="card">
   <h2>거래 내역</h2>
   <table>
-    <thead><tr><th>심볼 / 종목명</th><th>진입</th><th>청산</th><th>진입가</th><th>청산가</th><th>PnL</th><th>청산 사유</th><th>진입 점수</th><th>진입 사유</th></tr></thead>
+    <thead>
+      <tr>
+        <th>심볼 / 종목명</th>
+        <th>진입</th>
+        <th>청산</th>
+        <th>진입가</th>
+        <th>청산가</th>
+        <th>PnL</th>
+        <th>보유일</th>
+        <th>SL 거리(ATR)</th>
+        <th>RR 실현</th>
+        <th>MAE</th>
+        <th>MFE</th>
+        <th>Regime</th>
+        <th>Structure</th>
+        <th>청산 사유</th>
+        <th>진입 점수</th>
+        <th>점수 구성요소</th>
+        <th>진입 사유</th>
+      </tr>
+    </thead>
     <tbody>
     {% for t in trades %}
       <tr>
         <td>{{ t.symbol }} {{ t.get("name", "") }}</td><td>{{ t.entry_date }}</td><td>{{ t.exit_date }}</td>
         <td>{{ "%.2f"|format(t.entry_px) }}</td><td>{{ "%.2f"|format(t.exit_px) }}</td>
         <td>{{ "%.0f"|format(t.pnl) }}</td>
+        <td>{{ t.get("hold_days", 0) }}</td>
+        <td>{% if t.stop_distance_atr is not none %}{{ "%.2f"|format(t.stop_distance_atr) }}{% else %}-{% endif %}</td>
+        <td>{% if t.rr_realized is not none %}{{ "%.2f"|format(t.rr_realized) }}{% else %}-{% endif %}</td>
+        <td>{{ "%.2f"|format(t.get("mae", 0.0)) }}</td>
+        <td>{{ "%.2f"|format(t.get("mfe", 0.0)) }}</td>
+        <td>{{ t.get("entry_regime_tag", "-") }}</td>
+        <td>{{ t.get("entry_structure_bias", "-") }}</td>
         <td>
           {% if t.exit_reason_lines %}
             <ul>{% for r in t.exit_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
@@ -48,6 +79,16 @@ ul{margin:0;padding-left:16px}
           {% endif %}
         </td>
         <td>{{ "%.1f"|format(t.get('entry_score', 0)) }}</td>
+        <td>
+          {% if t.entry_breakdown_items %}
+            <details>
+              <summary>보기</summary>
+              <ul>{% for r in t.entry_breakdown_items %}<li>{{ r }}</li>{% endfor %}</ul>
+            </details>
+          {% else %}
+            -
+          {% endif %}
+        </td>
         <td>
           {% if t.entry_reason_lines %}
             <ul>{% for r in t.entry_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
@@ -59,6 +100,26 @@ ul{margin:0;padding-left:16px}
     {% endfor %}
     </tbody>
   </table>
+</div>
+
+<div class="card">
+  <h2>상세 보기 카드</h2>
+  <div class="detail-grid">
+    {% for t in trades %}
+      <div class="detail-card">
+        <div><strong>{{ t.symbol }}</strong> {{ t.get("name", "") }}</div>
+        <div class="small">{{ t.entry_date }} → {{ t.exit_date }}</div>
+        <div>진입 {{ "%.2f"|format(t.entry_px) }} · 청산 {{ "%.2f"|format(t.exit_px) }} · PnL {{ "%.0f"|format(t.pnl) }}</div>
+        <div>보유 {{ t.get("hold_days", 0) }}일 · RR {{ "%.2f"|format(t.rr_realized) if t.rr_realized is not none else "-" }}</div>
+        <div>MAE {{ "%.2f"|format(t.get("mae", 0.0)) }} · MFE {{ "%.2f"|format(t.get("mfe", 0.0)) }}</div>
+        <div>
+          <span class="tag">Regime {{ t.get("entry_regime_tag", "-") }}</span>
+          <span class="tag">Structure {{ t.get("entry_structure_bias", "-") }}</span>
+          <span class="tag">SL/ATR {{ "%.2f"|format(t.stop_distance_atr) if t.stop_distance_atr is not none else "-" }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
 </div>
 </body>
 </html>""")
@@ -89,6 +150,11 @@ def render_backtest_report(path: str, payload: Dict[str,Any]) -> None:
         trade = dict(t)
         trade["exit_reason_lines"] = _split_reasons(trade.get("exit_reason", ""))
         trade["entry_reason_lines"] = _split_reasons(trade.get("entry_reason", ""))
+        breakdown = trade.get("entry_breakdown") or {}
+        trade["entry_breakdown_items"] = [
+            f"{k}: {v:.2f}" if isinstance(v, (int, float)) else f"{k}: {v}"
+            for k, v in sorted(breakdown.items())
+        ]
         trades.append(trade)
     payload["trades"] = trades
     payload["equity_png"] = _equity_png(payload.get("equity_curve", []))
