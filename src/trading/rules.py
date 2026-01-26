@@ -310,6 +310,15 @@ class TradeRules:
             return decisions
 
         if ctx is not None:
+            if self._ma_slope_sell_gate(ctx):
+                decisions.append(
+                    ExitDecision(
+                        action="EXIT",
+                        reason=self._ma_slope_sell_reason(ctx),
+                        price=close_px,
+                    )
+                )
+                return decisions
             if self.exit_on_structure_break:
                 bos_dir = (ctx.get("bos") or {}).get("direction")
                 if ctx.get("structure_bias") == "BEAR" or bos_dir == "DOWN":
@@ -361,6 +370,9 @@ class TradeRules:
                 if self._volume_confirm(ctx)
                 else "거래량 확인: 평균 대비 거래량 부족."
             )
+        ma_gate = ctx.get("ma_slope_gate") or {}
+        for line in ma_gate.get("buy_reasons") or []:
+            reasons.append(line)
         if self.min_confirmations > 0:
             reasons.append(f"추가 모듈 확인 {confirmations}건 충족(최소 {self.min_confirmations}).")
         if ctx.get("structure_bias") == "BULL":
@@ -417,6 +429,19 @@ class TradeRules:
         if volume_ratio is None:
             return False
         return bool(volume_ratio >= self.min_volume_ratio)
+
+    def _ma_slope_sell_gate(self, ctx: Dict[str, Any]) -> bool:
+        gate = ctx.get("ma_slope_gate") or {}
+        if not gate.get("enabled", False):
+            return False
+        return bool(gate.get("sell_pass"))
+
+    def _ma_slope_sell_reason(self, ctx: Dict[str, Any]) -> str:
+        gate = ctx.get("ma_slope_gate") or {}
+        reasons = gate.get("sell_reasons") or []
+        if reasons:
+            return "MA 기울기 매도 게이트 충족: " + " / ".join(reasons)
+        return "MA 기울기 매도 게이트 충족"
 
     def _module_checks(self, ctx: Dict[str, Any], volume_ok: bool) -> Dict[str, Dict[str, Any]]:
         results: Dict[str, Dict[str, Any]] = {}

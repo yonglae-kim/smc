@@ -129,6 +129,15 @@ backtest:
     w_fvg_age_old: -0.5
     require_tailwind: false
     require_above_ma200: false
+    ma_slope_gate:
+      enabled: true
+      ma_fast: 20
+      ma_slow: 200
+      slope_window: 5
+      buy_slope_threshold: 0.015
+      sell_slope_threshold: -0.015
+      require_close_confirm_for_buy: true
+      require_close_confirm_for_sell: true
   tp:
     rr_target: 2.0
     partial_rr: 1.0

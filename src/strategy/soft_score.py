@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional, Tuple
 
 from .base import Strategy
+from ..signals.ma_slope_gate import normalize_ma_slope_gate_config
 
 def _bucket_dist(dist: Optional[float], levels: list[tuple[float,float]]) -> float:
     if dist is None:
@@ -61,6 +62,7 @@ class SoftScoreStrategy(Strategy):
         self.w_ob_age_old = float(p.get("w_ob_age_old", -0.5))
         self.fvg_age_max = int(p.get("fvg_age_max", 60))
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
+        self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(p.get("ma_slope_gate"))
 
     def _hard_gates(self, ctx: Dict[str, Any]) -> Dict[str, bool]:
         # Hard Gate
@@ -76,6 +78,12 @@ class SoftScoreStrategy(Strategy):
 
         room_to_high_atr = ctx.get("room_to_high_atr")
         gates["room_to_high"] = room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
+        if self.ma_slope_gate_cfg.get("enabled", True):
+            gate_ctx = ctx.get("ma_slope_gate") or {}
+            buy_metrics = gate_ctx.get("buy_metrics") or {}
+            gates["ma20_below_ma200"] = bool(buy_metrics.get("ma_relation_pass", False))
+            gates["ma20_slope_buy"] = bool(buy_metrics.get("slope_pass", False))
+            gates["close_confirm_buy"] = bool(buy_metrics.get("close_confirm_pass", False))
         return gates
 
     def evaluate(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
