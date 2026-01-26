@@ -74,16 +74,25 @@ class SoftScoreStrategy(Strategy):
 
         ob = ctx.get("ob") or {}
         invalidation = ob.get("invalidation")
-        gates["invalidation_available"] = invalidation is not None or ctx.get("atr14") is not None
+        if has_ob:
+            gates["invalidation_available"] = invalidation is not None or ctx.get("atr14") is not None
+        else:
+            gates["invalidation_available"] = True
 
         room_to_high_atr = ctx.get("room_to_high_atr")
         gates["room_to_high"] = room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
         if self.ma_slope_gate_cfg.get("enabled", True):
             gate_ctx = ctx.get("ma_slope_gate") or {}
             buy_metrics = gate_ctx.get("buy_metrics") or {}
-            gates["ma20_below_ma200"] = bool(buy_metrics.get("ma_relation_pass", False))
-            gates["ma20_slope_buy"] = bool(buy_metrics.get("slope_pass", False))
-            gates["close_confirm_buy"] = bool(buy_metrics.get("close_confirm_pass", False))
+            has_ma_metrics = (
+                buy_metrics.get("ma_fast") is not None
+                and buy_metrics.get("ma_slow") is not None
+                and buy_metrics.get("slope_pct") is not None
+            )
+            if has_ma_metrics:
+                gates["ma20_below_ma200"] = bool(buy_metrics.get("ma_relation_pass", False))
+                gates["ma20_slope_buy"] = bool(buy_metrics.get("slope_pass", False))
+                gates["close_confirm_buy"] = bool(buy_metrics.get("close_confirm_pass", False))
         return gates
 
     def evaluate(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
