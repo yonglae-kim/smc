@@ -11,7 +11,6 @@ from ..strategy.base import Strategy
 from ..trading.models import Position
 from ..trading.rules import TradeRules
 from ..utils.progress import Progress
-from ..utils.rank import assign_percentile_rank
 
 
 def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
@@ -77,16 +76,8 @@ def run_backtest(
     max_positions = int(cfg.backtest.max_positions)
     fee_bps = float(cfg.backtest.fee_bps)
     slippage_bps = float(cfg.backtest.slippage_bps)
-    fill_price = str(cfg.backtest.fill_price)
-    tp_cfg = cfg.backtest.tp
-    tp_rr_target = max(0.1, float(tp_cfg.rr_target))
-    tp_partial_rr = max(0.0, float(tp_cfg.partial_rr))
-    tp_partial_size = float(tp_cfg.partial_size)
-    move_stop_to_entry = bool(tp_cfg.move_stop_to_entry)
-    tp_partial_size = max(0.0, min(tp_partial_size, 1.0))
-    if tp_partial_rr >= tp_rr_target or tp_partial_size <= 0:
-        tp_partial_rr = 0.0
-        tp_partial_size = 0.0
+    fill_price = str(trade_rules.entry_price_mode)
+    stop_grace_days = int(getattr(cfg.backtest, "stop_grace_days", 0))
 
     prog = Progress(total=len(cal), label="SimDays", every=25)
     day_i = 0
@@ -146,22 +137,8 @@ def run_backtest(
                         ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
                         trade_rules.update_trailing_stop(pos, ctx)
 
-            if low_px <= pos.stop_px:
-                to_close.append((sym, pos.stop_px, "STOP"))
-                continue
-
-            if not pos.took_partial and pos.tp1_size > 0 and high_px >= pos.tp1_px:
-                partial_closes.append((sym, pos.tp1_px, "TP1", pos.tp1_size))
-                pos.remaining_size = max(0.0, pos.remaining_size - pos.tp1_size)
-                pos.took_partial = True
-                if pos.remaining_size <= 0:
-                    positions.pop(sym, None)
-                    continue
-                if move_stop_to_entry and pos.stop_px < pos.entry_px:
-                    pos.stop_px = pos.entry_px
-
-            if pos.remaining_size > 0 and high_px >= pos.tp2_px:
-                to_close.append((sym, pos.tp2_px, "TP"))
+            if stop_grace_days > 0 and pos.hold_days < stop_grace_days:
+                pos.hold_days += 1
                 continue
 
             exit_decisions = trade_rules.evaluate_exit(
@@ -242,7 +219,6 @@ def run_backtest(
         # entries
         if len(positions) < max_positions:
             day_candidates = []
-            day_contexts = []
 
             for meta in symbols_meta:
                 sym = meta["symbol"]
@@ -282,18 +258,7 @@ def run_backtest(
                     else {"tag": "UNKNOWN", "ma200": None, "rsi": None, "atr_spike": None}
                 )
                 ctx = score_candidate(ctx, cfg.scoring.weights)
-                day_contexts.append({"sym": sym, "ctx": ctx, "df_full": df_full, "meta": meta})
 
-            assign_percentile_rank(
-                [item["ctx"] for item in day_contexts],
-                lambda c: (c.get("rs") or {}).get("diff"),
-                "rs_rank_pct",
-            )
-            for item in day_contexts:
-                sym = item["sym"]
-                ctx = item["ctx"]
-                df_full = item["df_full"]
-                meta = item["meta"]
                 signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.get("close", 0.0)))
                 if not trade_rules.signal_passes(signal):
                     stats["strategy_exclude"] += 1

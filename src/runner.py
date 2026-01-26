@@ -7,7 +7,6 @@ from .config import load_config
 from .utils.http import HttpClient
 from .utils.time import today_kst, now_kst_iso
 from .utils.progress import Progress
-from .utils.rank import assign_percentile_rank
 from .providers.naver import NaverChartProvider, NaverMarketSumFetcher
 from .storage.fs import FSStorage
 from .universe.builder import UniverseBuilder
@@ -126,7 +125,6 @@ def run(config_path: str) -> None:
     storage.save_json(f"state/analysis_progress_{ymd}.json", {"done": sorted(list(done))})
 
     # Rank (candidates are still within top500 universe)
-    assign_percentile_rank(rows, lambda r: (r.get("rs") or {}).get("diff"), "rs_rank_pct")
     rows_sorted = sorted(rows, key=lambda x: (-x.get("score", 0), x.get("symbol", "")))
 
     signal_rows = []
@@ -167,8 +165,7 @@ def run(config_path: str) -> None:
         table_rows.append({
             "rank": rank, "score": c.get("score",0.0), "symbol": c["symbol"], "name": c.get("name",""),
             "market": c.get("market",""), "tags": c.get("tags",[]), "close": c.get("close",0.0),
-            "ma20": c.get("ma20"), "ma200": c.get("ma200"), "ma_slope_pct": c.get("ma_slope_pct"),
-            "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
+            "ma200": c.get("ma200"), "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
         })
 
     signal_map = {r["signal"].symbol: r for r in signal_rows}
@@ -382,7 +379,6 @@ def run(config_path: str) -> None:
             trade_rules.describe_score_breakdown(row["signal"].score_breakdown)
         ) if row["signal"].score_breakdown else "(no components)"
         c["gate_text"] = "\n".join([f"{k}: {'통과' if v else '실패'}" for k, v in row["signal"].gates.items()])
-        c["module_text"] = "\n".join(trade_rules.describe_modules(row["signal"].modules)) if row["signal"].modules else "(no modules)"
         plan_reasons = row["entry_plan"].rationale + [f"무효화 조건: {row['entry_plan'].invalidation}"]
         all_reasons = list(row["signal"].reasons) + plan_reasons
         c["reason_text"] = "\n".join(all_reasons) if all_reasons else "(no reasons)"
@@ -398,7 +394,6 @@ def run(config_path: str) -> None:
                 "signal": row["signal"],
                 "entry_plan": row["entry_plan"],
                 "gates": [{"key": k, "pass": v} for k, v in row["signal"].gates.items()],
-                "modules": trade_rules.describe_modules(row["signal"].modules) if row["signal"].modules else [],
             }
         )
 

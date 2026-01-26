@@ -37,11 +37,3 @@ def atr(df: pd.DataFrame, n: int=14) -> pd.Series:
         (low - prev_close).abs()
     ], axis=1).max(axis=1)
     return tr.ewm(alpha=1/n, adjust=False).mean()
-
-def bollinger_bands(close: pd.Series, n: int = 20, k: float = 2.0) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
-    mid = close.rolling(n, min_periods=n).mean()
-    std = close.rolling(n, min_periods=n).std(ddof=0)
-    upper = mid + k * std
-    lower = mid - k * std
-    width = (upper - lower) / (mid + 1e-12)
-    return mid, upper, lower, width

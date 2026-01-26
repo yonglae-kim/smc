@@ -94,10 +94,8 @@ function filterTable(){
       <th>시장</th>
       <th>태그</th>
       <th onclick="sortTable(6)">종가</th>
-      <th onclick="sortTable(7)">MA20</th>
-      <th onclick="sortTable(8)">MA200</th>
-      <th onclick="sortTable(9)">Slope20</th>
-      <th onclick="sortTable(10)">RSI</th>
+      <th onclick="sortTable(7)">MA200</th>
+      <th onclick="sortTable(8)">RSI</th>
       <th>레벨</th>
     </tr>
   </thead>
@@ -111,10 +109,8 @@ function filterTable(){
       <td>{{ r.market }}</td>
       <td>{{ r.tags|join(", ") }}</td>
       <td data-sort="{{ r.close }}">{{ "%.0f"|format(r.close) }}</td>
-      <td data-sort="{{ r.ma20 or 0 }}">{{ "%.0f"|format(r.ma20) if r.ma20 is not none else "" }}</td>
-      <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 is not none else "" }}</td>
-      <td data-sort="{{ r.ma_slope_pct or 0 }}">{{ "%.2f"|format(r.ma_slope_pct * 100) if r.ma_slope_pct is not none else "" }}%</td>
-      <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 is not none else "" }}</td>
+      <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 else "" }}</td>
+      <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 else "" }}</td>
       <td>{{ r.levels }}</td>
     </tr>
   {% endfor %}
@@ -135,7 +131,6 @@ function filterTable(){
       <th>목표</th>
       <th>RR</th>
       <th>게이트</th>
-      <th>모듈</th>
     </tr>
   </thead>
   <tbody>
@@ -152,11 +147,6 @@ function filterTable(){
       <td>
         {% for g in b.gates %}
           <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
-        {% endfor %}
-      </td>
-      <td>
-        {% for m in b.modules %}
-          <span class="badge">{{ m }}</span>
         {% endfor %}
       </td>
     </tr>
@@ -252,8 +242,6 @@ function filterTable(){
       <pre>{{ c.gate_text }}</pre>
       <div style="font-weight:700;margin:10px 0 6px 0">점수 분해</div>
       <pre>{{ c.score_text }}</pre>
-      <div style="font-weight:700;margin:10px 0 6px 0">추가 분석 모듈</div>
-      <pre>{{ c.module_text }}</pre>
       <div style="font-weight:700;margin:10px 0 6px 0">진입 사유</div>
       <pre>{{ c.reason_text }}</pre>
       <div class="small" style="margin-top:10px">
