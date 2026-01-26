@@ -7,6 +7,7 @@ import math
 import pandas as pd
 
 from .models import EntryPlan, ExitDecision, Position, TradeSignal
+from ..signals.ma_slope_gate import evaluate_ma_slope_gate_from_values, normalize_ma_slope_gate_config
 from ..strategy.soft_score import SoftScoreStrategy
 
 
@@ -45,6 +46,9 @@ class TradeRules:
         self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
+        strategy_params = getattr(cfg.backtest, "strategy_params", {}) or {}
+        self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(strategy_params.get("ma_slope_gate"))
+        self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
 
     def next_trading_day(self, calendar: Iterable[pd.Timestamp], date: str) -> str:
         if not calendar:
@@ -129,6 +133,7 @@ class TradeRules:
         score = float(eval_result["score"])
         min_score = max(self.min_score, float(eval_result.get("threshold", 0.0)))
         gates = dict(eval_result.get("gates", {}))
+        gate_reasons = list(eval_result.get("gate_reasons", []))
         gates["score_min"] = score >= min_score
         gates["min_rr"] = entry_plan.rr >= self.min_rr
         gates["min_expected_return"] = entry_plan.expected_return >= self.min_expected_return
@@ -145,6 +150,7 @@ class TradeRules:
             confidence=float(confidence),
             reasons=reasons,
             gates=gates,
+            gate_reasons=gate_reasons,
             score_breakdown=eval_result.get("breakdown", {}),
             invalidation=entry_plan.invalidation,
         )
@@ -243,7 +249,7 @@ class TradeRules:
                 decisions.append(
                     ExitDecision(
                         action="EXIT",
-                        reason="TP/SL 동시 터치: TP 우선(낙관적)",
+                        reason="TP/SL 동시 터치: TP 우선(낙관적, optimistic)",
                         price=position.take_profit,
                     )
                 )
@@ -251,7 +257,7 @@ class TradeRules:
             decisions.append(
                 ExitDecision(
                     action="EXIT",
-                    reason="TP/SL 동시 터치: SL 우선(보수적)",
+                    reason="TP/SL 동시 터치: SL 우선(보수적, conservative)",
                     price=position.stop_loss,
                 )
             )
@@ -274,6 +280,28 @@ class TradeRules:
         if tp_hit:
             decisions.append(ExitDecision(action="EXIT", reason="목표가 도달(전량 익절)", price=position.take_profit))
             return decisions
+
+        if ctx and self.ma_slope_gate_enabled:
+            gate_pass, reasons, _ = evaluate_ma_slope_gate_from_values(
+                close=ctx.get("close"),
+                ma_fast=ctx.get("ma_slope_fast", ctx.get("ma20")),
+                ma_slow=ctx.get("ma_slope_slow", ctx.get("ma200")),
+                slope_pct=ctx.get("ma_slope_pct"),
+                side="sell",
+                buy_slope_threshold=float(self.ma_slope_gate_cfg["buy_slope_threshold"]),
+                sell_slope_threshold=float(self.ma_slope_gate_cfg["sell_slope_threshold"]),
+                require_close_confirm_for_buy=bool(self.ma_slope_gate_cfg["require_close_confirm_for_buy"]),
+                require_close_confirm_for_sell=bool(self.ma_slope_gate_cfg["require_close_confirm_for_sell"]),
+            )
+            if gate_pass:
+                decisions.append(
+                    ExitDecision(
+                        action="EXIT",
+                        reason="MA Slope Hard-Gate: " + "; ".join(reasons),
+                        price=close_px,
+                    )
+                )
+                return decisions
 
         if position.hold_days >= self.max_hold_days:
             decisions.append(ExitDecision(action="EXIT", reason=f"보유기간 만료({self.max_hold_days}일)", price=close_px))
@@ -311,6 +339,9 @@ class TradeRules:
         reasons = []
         if not all_pass:
             reasons.append("게이트 조건 일부 미달(상세는 게이트 표 참고).")
+            gate_reasons = eval_result.get("gate_reasons", [])
+            if gate_reasons:
+                reasons.extend(gate_reasons)
         if ctx.get("structure_bias") == "BULL":
             reasons.append("구조 바이어스: 상승(HH/HL 구조).")
         if ctx.get("tag_confluence_ob_fvg"):

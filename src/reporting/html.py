@@ -94,8 +94,10 @@ function filterTable(){
       <th>시장</th>
       <th>태그</th>
       <th onclick="sortTable(6)">종가</th>
-      <th onclick="sortTable(7)">MA200</th>
-      <th onclick="sortTable(8)">RSI</th>
+      <th onclick="sortTable(7)">MA20</th>
+      <th onclick="sortTable(8)">MA200</th>
+      <th onclick="sortTable(9)">Slope20%</th>
+      <th onclick="sortTable(10)">RSI</th>
       <th>레벨</th>
     </tr>
   </thead>
@@ -109,7 +111,9 @@ function filterTable(){
       <td>{{ r.market }}</td>
       <td>{{ r.tags|join(", ") }}</td>
       <td data-sort="{{ r.close }}">{{ "%.0f"|format(r.close) }}</td>
+      <td data-sort="{{ r.ma20 or 0 }}">{{ "%.0f"|format(r.ma20) if r.ma20 else "" }}</td>
       <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 else "" }}</td>
+      <td data-sort="{{ r.ma_slope_pct or 0 }}">{{ "%.2f"|format(r.ma_slope_pct * 100) if r.ma_slope_pct is not none else "" }}</td>
       <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 else "" }}</td>
       <td>{{ r.levels }}</td>
     </tr>
@@ -217,7 +221,7 @@ function filterTable(){
   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
     <div>
       <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
-      <div class="small">점수 {{ "%.2f"|format(c.signal.score) }} · 종가 {{ "%.0f"|format(c.close) }} · ATR {{ "%.1f"|format(c.atr14 or 0) }} · RS {{ c.rs.tag }}</div>
+      <div class="small">점수 {{ "%.2f"|format(c.signal.score) }} · 종가 {{ "%.0f"|format(c.close) }} · MA20 {{ "%.0f"|format(c.ma20 or 0) }} · MA200 {{ "%.0f"|format(c.ma200 or 0) }} · Slope20 {{ "%.2f"|format((c.ma_slope_pct or 0) * 100) }}% · ATR {{ "%.1f"|format(c.atr14 or 0) }} · RS {{ c.rs.tag }}</div>
       <div style="margin-top:6px">
         {% for t in c.tags %}
           <span class="badge">{{ t }}</span>

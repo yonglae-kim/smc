@@ -165,7 +165,11 @@ def run(config_path: str) -> None:
         table_rows.append({
             "rank": rank, "score": c.get("score",0.0), "symbol": c["symbol"], "name": c.get("name",""),
             "market": c.get("market",""), "tags": c.get("tags",[]), "close": c.get("close",0.0),
-            "ma200": c.get("ma200"), "rsi14": c.get("rsi14"), "levels": " | ".join(levels)
+            "ma20": c.get("ma20"),
+            "ma200": c.get("ma200"),
+            "ma_slope_pct": c.get("ma_slope_pct"),
+            "rsi14": c.get("rsi14"),
+            "levels": " | ".join(levels),
         })
 
     signal_map = {r["signal"].symbol: r for r in signal_rows}
@@ -378,7 +382,11 @@ def run(config_path: str) -> None:
         c["score_text"] = "\n".join(
             trade_rules.describe_score_breakdown(row["signal"].score_breakdown)
         ) if row["signal"].score_breakdown else "(no components)"
-        c["gate_text"] = "\n".join([f"{k}: {'통과' if v else '실패'}" for k, v in row["signal"].gates.items()])
+        gate_lines = [f"{k}: {'통과' if v else '실패'}" for k, v in row["signal"].gates.items()]
+        if row["signal"].gate_reasons:
+            gate_lines.append("---")
+            gate_lines.extend(row["signal"].gate_reasons)
+        c["gate_text"] = "\n".join(gate_lines)
         plan_reasons = row["entry_plan"].rationale + [f"무효화 조건: {row['entry_plan'].invalidation}"]
         all_reasons = list(row["signal"].reasons) + plan_reasons
         c["reason_text"] = "\n".join(all_reasons) if all_reasons else "(no reasons)"

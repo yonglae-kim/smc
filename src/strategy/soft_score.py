@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional, Tuple
 
 from .base import Strategy
+from ..signals.ma_slope_gate import evaluate_ma_slope_gate_from_values, normalize_ma_slope_gate_config
 
 def _bucket_dist(dist: Optional[float], levels: list[tuple[float,float]]) -> float:
     if dist is None:
@@ -63,17 +64,21 @@ class SoftScoreStrategy(Strategy):
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
         self.require_tailwind = bool(p.get("require_tailwind", False))
         self.require_above_ma200 = bool(p.get("require_above_ma200", False))
+        self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(p.get("ma_slope_gate"))
+        self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
         trade_cfg = getattr(cfg, "trade", None)
         if trade_cfg is not None and getattr(trade_cfg, "min_score", None) is not None:
             self.threshold = max(self.threshold, float(trade_cfg.min_score))
 
-    def _hard_gates(self, ctx: Dict[str, Any]) -> Dict[str, bool]:
+    def _hard_gates(self, ctx: Dict[str, Any]) -> Tuple[Dict[str, bool], list[str], Dict[str, Any]]:
         # Hard Gate
         has_ob = bool(ctx.get("ob"))
         has_fvg = bool(ctx.get("fvg") or ctx.get("fvg_active"))
         gates = {
             "has_zone": bool(has_ob or has_fvg),
         }
+        gate_reasons: list[str] = []
+        gate_metrics: Dict[str, Any] = {}
 
         ob = ctx.get("ob") or {}
         invalidation = ob.get("invalidation")
@@ -86,10 +91,25 @@ class SoftScoreStrategy(Strategy):
         rtag = regime.get("tag")
         gates["regime_tailwind"] = (not self.require_tailwind) or (rtag == "TAILWIND")
         gates["above_ma200"] = (not self.require_above_ma200) or bool(ctx.get("above_ma200"))
-        return gates
+        if self.ma_slope_gate_enabled:
+            gate_pass, reasons, metrics = evaluate_ma_slope_gate_from_values(
+                close=ctx.get("close"),
+                ma_fast=ctx.get("ma_slope_fast", ctx.get("ma20")),
+                ma_slow=ctx.get("ma_slope_slow", ctx.get("ma200")),
+                slope_pct=ctx.get("ma_slope_pct"),
+                side="buy",
+                buy_slope_threshold=float(self.ma_slope_gate_cfg["buy_slope_threshold"]),
+                sell_slope_threshold=float(self.ma_slope_gate_cfg["sell_slope_threshold"]),
+                require_close_confirm_for_buy=bool(self.ma_slope_gate_cfg["require_close_confirm_for_buy"]),
+                require_close_confirm_for_sell=bool(self.ma_slope_gate_cfg["require_close_confirm_for_sell"]),
+            )
+            gates["ma_slope_gate"] = gate_pass
+            gate_reasons.extend(reasons)
+            gate_metrics.update(metrics)
+        return gates, gate_reasons, gate_metrics
 
     def evaluate(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
-        gates = self._hard_gates(ctx)
+        gates, gate_reasons, gate_metrics = self._hard_gates(ctx)
         breakdown: Dict[str,Any] = {}
         score = 0.0
         has_ob = bool(ctx.get("ob"))
@@ -261,6 +281,8 @@ class SoftScoreStrategy(Strategy):
             "score": float(score),
             "breakdown": breakdown,
             "gates": gates,
+            "gate_reasons": gate_reasons,
+            "gate_metrics": gate_metrics,
             "threshold": float(self.threshold),
         }
 
