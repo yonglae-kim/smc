@@ -50,6 +50,8 @@ class SoftScoreStrategy(Strategy):
         self.w_momentum_60_negative = float(p.get("w_momentum_60_negative", -1.5))
         self.w_ma20_slope = float(p.get("w_ma20_slope", 1.0))
         self.ma20_slope_atr_threshold = float(p.get("ma20_slope_atr_threshold", 0.15))
+        self.trend_gate_ma20_slope_atr_threshold = float(p.get("trend_gate_ma20_slope_atr_threshold", 0.15))
+        self.stop_distance_atr_max = float(p.get("stop_distance_atr_max", 1.5))
         self.atr_ratio_low = float(p.get("atr_ratio_low", 0.9))
         self.atr_ratio_high = float(p.get("atr_ratio_high", 1.4))
         self.w_atr_ratio_low = float(p.get("w_atr_ratio_low", 0.75))
@@ -86,11 +88,21 @@ class SoftScoreStrategy(Strategy):
 
         room_to_high_atr = ctx.get("room_to_high_atr")
         gates["room_to_high"] = room_to_high_atr is None or room_to_high_atr >= self.min_room_to_high_atr
+        stop_distance_atr = ctx.get("stop_distance_atr")
+        gates["stop_distance_atr"] = stop_distance_atr is None or stop_distance_atr <= self.stop_distance_atr_max
+        if stop_distance_atr is not None:
+            gate_metrics["stop_distance_atr"] = stop_distance_atr
 
         regime = (ctx.get("regime") or {})
         rtag = regime.get("tag")
         gates["regime_tailwind"] = (not self.require_tailwind) or (rtag == "TAILWIND")
         gates["above_ma200"] = (not self.require_above_ma200) or bool(ctx.get("above_ma200"))
+        structure_bias = ctx.get("structure_bias")
+        ma20_slope_atr = ctx.get("ma20_slope_atr")
+        gates["trend_quality"] = (
+            structure_bias == "BULL"
+            or (ma20_slope_atr is not None and ma20_slope_atr >= self.trend_gate_ma20_slope_atr_threshold)
+        )
         if self.ma_slope_gate_enabled:
             gate_pass, reasons, metrics = evaluate_ma_slope_gate_from_values(
                 close=ctx.get("close"),

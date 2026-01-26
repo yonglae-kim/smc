@@ -46,6 +46,10 @@ class TradeRules:
         self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
+        self.min_score_regime_non_tailwind_add = float(
+            getattr(trade, "min_score_regime_non_tailwind_add", 0.5)
+        )
+        self.min_score_regime_headwind_add = float(getattr(trade, "min_score_regime_headwind_add", 1.5))
         strategy_params = getattr(cfg.backtest, "strategy_params", {}) or {}
         self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(strategy_params.get("ma_slope_gate"))
         self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
@@ -102,6 +106,11 @@ class TradeRules:
             stop_loss = entry_px - atr * self.stop_atr_mult
         if not math.isfinite(stop_loss) or stop_loss >= entry_px:
             stop_loss = entry_px * (1 - self.min_risk_ratio)
+        stop_distance_atr = None
+        if atr > 0:
+            stop_distance_atr = (entry_px - stop_loss) / atr
+            if math.isfinite(stop_distance_atr):
+                ctx["stop_distance_atr"] = float(stop_distance_atr)
         risk_per_share = max(1e-6, entry_px - stop_loss)
         take_profit = entry_px + self.rr_target * risk_per_share
         rr = (take_profit - entry_px) / risk_per_share if risk_per_share > 0 else 0.0
@@ -132,6 +141,11 @@ class TradeRules:
         entry_plan = self.build_entry_plan(ctx, entry_price)
         score = float(eval_result["score"])
         min_score = max(self.min_score, float(eval_result.get("threshold", 0.0)))
+        regime_tag = (ctx.get("regime") or {}).get("tag")
+        if regime_tag != "TAILWIND":
+            min_score += self.min_score_regime_non_tailwind_add
+            if regime_tag == "HEADWIND":
+                min_score += self.min_score_regime_headwind_add
         gates = dict(eval_result.get("gates", {}))
         gate_reasons = list(eval_result.get("gate_reasons", []))
         gates["score_min"] = score >= min_score
