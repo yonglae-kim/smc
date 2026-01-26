@@ -73,6 +73,15 @@ class TradeCfg(BaseModel):
     exit_on_score_drop: bool = True
     tp_sl_conflict: str = "conservative"  # conservative | optimistic
     trail_atr_mult: float = 0.0
+    early_exit_rsi_macd_enabled: bool = True
+    early_exit_rsi_macd_days: int = 3
+    early_exit_rsi_threshold: float = 45.0
+    early_exit_macd_hist_threshold: float = 0.0
+    early_exit_bear_trend_enabled: bool = True
+    early_exit_ma20_slope_atr_threshold: float = 0.0
+    tp1_risk_reduction_enabled: bool = True
+    tp1_stop_atr_buffer: float = 0.25
+    tp1_trail_atr_mult: float = 0.0
 
 
 class BacktestCfg(BaseModel):

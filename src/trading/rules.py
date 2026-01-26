@@ -46,6 +46,17 @@ class TradeRules:
         self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
+        self.early_exit_rsi_macd_enabled = bool(getattr(trade, "early_exit_rsi_macd_enabled", True))
+        self.early_exit_rsi_macd_days = int(getattr(trade, "early_exit_rsi_macd_days", 3))
+        self.early_exit_rsi_threshold = float(getattr(trade, "early_exit_rsi_threshold", 45.0))
+        self.early_exit_macd_hist_threshold = float(getattr(trade, "early_exit_macd_hist_threshold", 0.0))
+        self.early_exit_bear_trend_enabled = bool(getattr(trade, "early_exit_bear_trend_enabled", True))
+        self.early_exit_ma20_slope_atr_threshold = float(
+            getattr(trade, "early_exit_ma20_slope_atr_threshold", 0.0)
+        )
+        self.tp1_risk_reduction_enabled = bool(getattr(trade, "tp1_risk_reduction_enabled", True))
+        self.tp1_stop_atr_buffer = float(getattr(trade, "tp1_stop_atr_buffer", 0.25))
+        self.tp1_trail_atr_mult = float(getattr(trade, "tp1_trail_atr_mult", 0.0))
         self.min_score_regime_non_tailwind_add = float(
             getattr(trade, "min_score_regime_non_tailwind_add", 0.5)
         )
@@ -252,6 +263,51 @@ class TradeRules:
         if new_stop > position.stop_loss:
             position.stop_loss = new_stop
 
+    def apply_tp1_risk_reduction(self, position: Position, ctx: Optional[Dict[str, Any]]) -> None:
+        if not self.tp1_risk_reduction_enabled:
+            return
+        atr = _safe_float((ctx or {}).get("atr14"), position.entry_atr or 0.0)
+        if atr > 0 and self.tp1_stop_atr_buffer > 0:
+            new_stop = position.entry_price + self.tp1_stop_atr_buffer * atr
+            if new_stop > position.stop_loss:
+                position.stop_loss = new_stop
+        if self.tp1_trail_atr_mult > 0 and (
+            position.trail is None or self.tp1_trail_atr_mult > position.trail
+        ):
+            position.trail = self.tp1_trail_atr_mult
+
+    def _extract_recent_series(self, ctx: Dict[str, Any], recent_key: str, fallback_key: str) -> List[float]:
+        series = ctx.get(recent_key)
+        values: List[float] = []
+        if isinstance(series, list):
+            values = [float(v) for v in series if v is not None and math.isfinite(float(v))]
+        else:
+            val = ctx.get(fallback_key)
+            if val is not None:
+                try:
+                    val_f = float(val)
+                    if math.isfinite(val_f):
+                        values = [val_f]
+                except (TypeError, ValueError):
+                    values = []
+        return values
+
+    def _has_consecutive_weakness(self, ctx: Dict[str, Any]) -> Tuple[bool, str]:
+        days = max(0, self.early_exit_rsi_macd_days)
+        if days <= 0:
+            return False, ""
+        rsi_series = self._extract_recent_series(ctx, "recent_rsi14", "rsi14")
+        macd_series = self._extract_recent_series(ctx, "recent_macd_hist", "macd_hist")
+        rsi_trigger = len(rsi_series) >= days and all(v < self.early_exit_rsi_threshold for v in rsi_series[-days:])
+        macd_trigger = len(macd_series) >= days and all(
+            v < self.early_exit_macd_hist_threshold for v in macd_series[-days:]
+        )
+        if rsi_trigger:
+            return True, f"RSI({self.early_exit_rsi_threshold:.0f}) {days}일 연속 하회"
+        if macd_trigger:
+            return True, f"MACD 히스토그램 {days}일 연속 약세"
+        return False, ""
+
     def evaluate_exit(
         self,
         position: Position,
@@ -303,6 +359,38 @@ class TradeRules:
         if tp_hit:
             decisions.append(ExitDecision(action="EXIT", reason="목표가 도달(전량 익절)", price=position.take_profit))
             return decisions
+
+        if ctx is not None:
+            if self.early_exit_rsi_macd_enabled:
+                weak_pass, weak_reason = self._has_consecutive_weakness(ctx)
+                if weak_pass:
+                    decisions.append(
+                        ExitDecision(
+                            action="EXIT",
+                            reason=f"조기 EXIT: {weak_reason}",
+                            price=close_px,
+                        )
+                    )
+                    return decisions
+
+            if self.early_exit_bear_trend_enabled:
+                ma20 = ctx.get("ma20")
+                ma20_slope_atr = ctx.get("ma20_slope_atr")
+                if ma20 is not None and ma20_slope_atr is not None:
+                    try:
+                        ma20_val = float(ma20)
+                        slope_val = float(ma20_slope_atr)
+                        if close_px < ma20_val and slope_val < self.early_exit_ma20_slope_atr_threshold:
+                            decisions.append(
+                                ExitDecision(
+                                    action="EXIT",
+                                    reason="조기 EXIT: MA20 이탈 + 기울기 약세 전환",
+                                    price=close_px,
+                                )
+                            )
+                            return decisions
+                    except (TypeError, ValueError):
+                        pass
 
         if ctx and self.ma_slope_gate_enabled:
             gate_pass, reasons, _ = evaluate_ma_slope_gate_from_values(

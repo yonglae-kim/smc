@@ -145,6 +145,15 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
 
         rs = relative_strength(df, index_df, int(cfg.regime.rs_lookback_days))
 
+    trade_cfg = getattr(cfg, "trade", None)
+    early_exit_days = int(getattr(trade_cfg, "early_exit_rsi_macd_days", 0)) if trade_cfg is not None else 0
+    recent_tail = max(0, early_exit_days)
+    recent_rsi14 = df["rsi14"].tail(recent_tail).tolist() if recent_tail > 0 else []
+    recent_macd_hist = df["macd_hist"].tail(recent_tail).tolist() if recent_tail > 0 else []
+    recent_close = df["close"].tail(recent_tail).tolist() if recent_tail > 0 else []
+    recent_ma20 = df["ma20"].tail(recent_tail).tolist() if recent_tail > 0 else []
+    recent_ma20_slope_atr = df["ma20_slope_atr"].tail(recent_tail).tolist() if recent_tail > 0 else []
+
     ctx = {
         "symbol": symbol_meta["symbol"],
         "name": symbol_meta.get("name",""),
@@ -175,6 +184,11 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "ma20_slope_atr": ma20_slope_atr,
         "room_to_high_atr": room_to_high_atr,
         "recent_high_20": recent_high_20,
+        "recent_rsi14": recent_rsi14,
+        "recent_macd_hist": recent_macd_hist,
+        "recent_close": recent_close,
+        "recent_ma20": recent_ma20,
+        "recent_ma20_slope_atr": recent_ma20_slope_atr,
         "structure_bias": bias,
         "bos": bos,
         "ob": None if ob is None else {
