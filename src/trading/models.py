@@ -66,6 +66,13 @@ class Position:
     hold_days: int = 0
     entry_score: float = 0.0
     entry_breakdown: Dict[str, Any] = field(default_factory=dict)
+    entry_stop_loss: Optional[float] = None
+    entry_atr: Optional[float] = None
+    entry_regime_tag: Optional[str] = None
+    entry_structure_bias: Optional[str] = None
+    stop_distance_atr: Optional[float] = None
+    mae: float = 0.0
+    mfe: float = 0.0
     tp1_price: Optional[float] = None
     tp1_size: float = 0.0
     took_partial: bool = False

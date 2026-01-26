@@ -213,6 +213,10 @@ class TradeRules:
             risk_per_share = max(1e-6, entry_price - entry_plan.stop_loss)
             tp1_price = entry_price + self.partial_rr * risk_per_share
             tp1_size = size * self.partial_size
+        atr = _safe_float(ctx.get("atr14"), 0.0)
+        stop_distance_atr = None
+        if atr > 0:
+            stop_distance_atr = (entry_price - stop_loss) / atr
         return Position(
             symbol=signal.symbol,
             name=ctx.get("name", ""),
@@ -228,6 +232,11 @@ class TradeRules:
             state="open",
             entry_score=signal.score,
             entry_breakdown=signal.score_breakdown,
+            entry_stop_loss=stop_loss,
+            entry_atr=atr if atr > 0 else None,
+            entry_regime_tag=(ctx.get("regime") or {}).get("tag"),
+            entry_structure_bias=ctx.get("structure_bias"),
+            stop_distance_atr=stop_distance_atr,
             tp1_price=tp1_price,
             tp1_size=tp1_size,
         )
