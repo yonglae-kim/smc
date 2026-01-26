@@ -9,6 +9,7 @@ from .analysis.smc.structure import bos_choch
 from .analysis.smc.fvg import detect_fvgs
 from .analysis.smc.ob import detect_ob_from_bos
 from .regime.regime import relative_strength
+from .signals.ma_slope_gate import compute_ma_slope_metrics, normalize_ma_slope_gate_config
 from .scoring import score_candidate
 
 def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.DataFrame, cfg) -> Optional[Dict[str,Any]]:
@@ -33,6 +34,16 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     df["momentum_60"] = df["close"].pct_change(60)
     df["ma20_slope_atr"] = (df["ma20"] - df["ma20"].shift(10)) / (df["atr14"] + 1e-9)
     df["recent_high_20"] = df["high"].rolling(20, min_periods=20).max()
+    strategy_params = getattr(cfg.backtest, "strategy_params", {}) or {}
+    ma_gate_cfg = normalize_ma_slope_gate_config(strategy_params.get("ma_slope_gate"))
+    ma_gate_metrics = compute_ma_slope_metrics(
+        df["close"],
+        ma_fast=int(ma_gate_cfg["ma_fast"]),
+        ma_slow=int(ma_gate_cfg["ma_slow"]),
+        slope_window=int(ma_gate_cfg["slope_window"]),
+    )
+    ma_gate_row = ma_gate_metrics.dropna(subset=["ma_fast", "ma_slow", "slope_pct", "close"])
+    ma_gate_row = ma_gate_row.iloc[-1] if not ma_gate_row.empty else None
 
     last = df.iloc[-1]
     atr_last = float(last["atr14"]) if not pd.isna(last["atr14"]) else None
@@ -68,6 +79,9 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
     momentum_20 = float(last["momentum_20"]) if not pd.isna(last["momentum_20"]) else None
     momentum_60 = float(last["momentum_60"]) if not pd.isna(last["momentum_60"]) else None
     ma20_slope_atr = float(last["ma20_slope_atr"]) if not pd.isna(last["ma20_slope_atr"]) else None
+    ma_slope_fast = float(ma_gate_row["ma_fast"]) if ma_gate_row is not None else None
+    ma_slope_slow = float(ma_gate_row["ma_slow"]) if ma_gate_row is not None else None
+    ma_slope_pct = float(ma_gate_row["slope_pct"]) if ma_gate_row is not None else None
     recent_high_20 = float(last["recent_high_20"]) if not pd.isna(last["recent_high_20"]) else None
     room_to_high_atr = None
     if atr_last and recent_high_20 is not None:
@@ -142,6 +156,10 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "atr_ratio": atr_ratio,
         "ma20": ma20,
         "ma200": ma200,
+        "ma_slope_fast": ma_slope_fast,
+        "ma_slope_slow": ma_slope_slow,
+        "ma_slope_pct": ma_slope_pct,
+        "ma_slope_window": int(ma_gate_cfg["slope_window"]),
         "above_ma200": above_ma200,
         "above_ma20": above_ma20,
         "ma20_above_ma200": ma20_above_ma200,

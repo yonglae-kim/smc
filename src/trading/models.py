@@ -14,7 +14,8 @@ class TradeSignal:
     confidence: float
     reasons: List[str]
     gates: Dict[str, bool]
-    score_breakdown: Dict[str, float]
+    score_breakdown: Dict[str, float] = field(default_factory=dict)
+    gate_reasons: List[str] = field(default_factory=list)
     invalidation: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -24,7 +25,6 @@ class TradeSignal:
 @dataclass
 class EntryPlan:
     entry_type: str
-    entry_type_label: str = ""
     entry_price: float
     stop_loss: float
     take_profit: float
@@ -32,6 +32,7 @@ class EntryPlan:
     expected_return: float
     rationale: List[str]
     invalidation: str
+    entry_type_label: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
