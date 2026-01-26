@@ -79,6 +79,15 @@ trade:
   exit_on_score_drop: true
   tp_sl_conflict: conservative
   trail_atr_mult: 0.0
+  early_exit_rsi_macd_enabled: true
+  early_exit_rsi_macd_days: 3
+  early_exit_rsi_threshold: 45
+  early_exit_macd_hist_threshold: 0.0
+  early_exit_bear_trend_enabled: true
+  early_exit_ma20_slope_atr_threshold: 0.0
+  tp1_risk_reduction_enabled: true
+  tp1_stop_atr_buffer: 0.25
+  tp1_trail_atr_mult: 0.0
   min_score_regime_non_tailwind_add: 0.5
   min_score_regime_headwind_add: 1.5
 backtest:

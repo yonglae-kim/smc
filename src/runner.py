@@ -265,6 +265,7 @@ def run(config_path: str) -> None:
                 pos.took_partial = True
                 if trade_rules.move_stop_to_entry and pos.stop_loss < pos.entry_price:
                     pos.stop_loss = pos.entry_price
+                trade_rules.apply_tp1_risk_reduction(pos, ctx)
 
         portfolio_rows.append(
             {
