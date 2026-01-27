@@ -129,7 +129,34 @@ class TradeRules:
             if math.isfinite(stop_distance_atr):
                 ctx["stop_distance_atr"] = float(stop_distance_atr)
         risk_per_share = max(1e-6, entry_px - stop_loss)
-        take_profit = entry_px + self.rr_target * risk_per_share
+        rr_target = float(self.rr_target)
+        atr_ratio = ctx.get("atr_ratio")
+        room_to_high_atr = ctx.get("room_to_high_atr")
+        momentum_20 = ctx.get("momentum_20")
+        momentum_60 = ctx.get("momentum_60")
+        if atr_ratio is not None and math.isfinite(float(atr_ratio)):
+            if atr_ratio >= 1.4:
+                rr_target += 0.25
+            elif atr_ratio >= 1.1:
+                rr_target += 0.1
+            elif atr_ratio <= 0.9:
+                rr_target -= 0.15
+        if room_to_high_atr is not None and math.isfinite(float(room_to_high_atr)):
+            if room_to_high_atr >= 2.5:
+                rr_target += 0.4
+            elif room_to_high_atr >= 1.5:
+                rr_target += 0.2
+            elif room_to_high_atr < 0.75:
+                rr_target -= 0.5
+        if momentum_20 is not None and math.isfinite(float(momentum_20)) and momentum_20 > 0:
+            rr_target += 0.15
+        if momentum_60 is not None and math.isfinite(float(momentum_60)):
+            if momentum_60 > 0:
+                rr_target += 0.2
+            elif momentum_60 < 0:
+                rr_target -= 0.2
+        rr_target = min(3.0, max(1.2, rr_target))
+        take_profit = entry_px + rr_target * risk_per_share
         rr = (take_profit - entry_px) / risk_per_share if risk_per_share > 0 else 0.0
         expected_return = (take_profit - entry_px) / max(entry_px, 1e-6)
         invalidation = "종가가 손절가 하회 또는 구조 붕괴 시 시나리오 무효."
