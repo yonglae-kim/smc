@@ -50,7 +50,8 @@ scoring:
     atr_spike_risk: -6
   top_detail: 50
 regime:
-  index_lookback_days: 260
+  index_lookback_days: 520
+  min_regime_bars: 260
   rs_lookback_days: 60
   atr_spike_mult: 1.8
 report:

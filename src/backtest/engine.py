@@ -17,6 +17,32 @@ def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
     return px * (1.0 + (fee_bps + slippage_bps) / 10000.0)
 
 
+def _required_regime_bars(cfg) -> int:
+    ma_slow = int(getattr(cfg.analysis, "ma_slow", 200))
+    rsi_period = int(getattr(cfg.analysis, "rsi_period", 14))
+    atr_period = int(getattr(cfg.analysis, "atr_period", 14))
+    rs_lookback = int(getattr(cfg.regime, "rs_lookback_days", 60))
+    min_regime_bars = int(getattr(cfg.regime, "min_regime_bars", 0))
+    return max(200, ma_slow, rsi_period + 1, atr_period + 60, rs_lookback + 5, min_regime_bars)
+
+
+def _slice_index_df(
+    meta: Dict[str, Any],
+    idx_kospi: Optional[pd.DataFrame],
+    idx_kosdaq: Optional[pd.DataFrame],
+    dt: pd.Timestamp,
+    min_bars: int,
+) -> Optional[pd.DataFrame]:
+    index_df = None
+    if meta.get("market") == "KOSPI" and idx_kospi is not None and len(idx_kospi) > 0:
+        index_df = idx_kospi[idx_kospi["date"] <= dt].copy()
+    elif meta.get("market") == "KOSDAQ" and idx_kosdaq is not None and len(idx_kosdaq) > 0:
+        index_df = idx_kosdaq[idx_kosdaq["date"] <= dt].copy()
+    if index_df is not None and len(index_df) < min_bars:
+        return None
+    return index_df
+
+
 def run_backtest(
     symbols_meta: List[Dict[str, Any]],
     ohlcv_map: Dict[str, pd.DataFrame],
@@ -93,6 +119,8 @@ def run_backtest(
         "exited": 0,
     }
 
+    min_regime_bars = _required_regime_bars(cfg)
+
     for dt in cal:
         day_i += 1
         prog.tick(day_i, extra=f"date={str(dt.date())} pos={len(positions)} eq={equity:,.0f}")
@@ -124,11 +152,7 @@ def run_backtest(
                 meta = next((m for m in symbols_meta if m["symbol"] == sym), None)
                 if meta is not None:
                     df_slice = df[df["date"] <= dt].copy()
-                    index_df = None
-                    if meta.get("market") == "KOSPI" and idx_kospi is not None and len(idx_kospi) > 0:
-                        index_df = idx_kospi[idx_kospi["date"] <= dt].copy()
-                    elif meta.get("market") == "KOSDAQ" and idx_kosdaq is not None and len(idx_kosdaq) > 0:
-                        index_df = idx_kosdaq[idx_kosdaq["date"] <= dt].copy()
+                    index_df = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
                     ctx = analyze_symbol(meta, df_slice, index_df, cfg)
                     if ctx:
                         ctx["regime"] = (
@@ -260,14 +284,7 @@ def run_backtest(
                     stats["short_slice"] += 1
                     continue
 
-                index_df = None
-                if meta.get("market") == "KOSPI" and idx_kospi is not None and len(idx_kospi) > 0:
-                    index_df = idx_kospi[idx_kospi["date"] <= dt].copy()
-                elif meta.get("market") == "KOSDAQ" and idx_kosdaq is not None and len(idx_kosdaq) > 0:
-                    index_df = idx_kosdaq[idx_kosdaq["date"] <= dt].copy()
-
-                if index_df is not None and len(index_df) < 60:
-                    index_df = None
+                index_df = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
 
                 ctx = analyze_symbol(meta, df_slice, index_df, cfg)
                 if ctx is None:

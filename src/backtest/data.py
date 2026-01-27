@@ -32,5 +32,8 @@ class BacktestDataLoader:
             return df_new
         return df_new
 
-    def ensure_index(self, index_code: str, count: int) -> pd.DataFrame:
-        return self.provider.get_index_ohlc(index_code, count=count)
+    def ensure_index(self, index_code: str, count: int, min_count: int | None = None) -> pd.DataFrame:
+        final_count = int(count)
+        if min_count is not None:
+            final_count = max(final_count, int(min_count))
+        return self.provider.get_index_ohlc(index_code, count=final_count)
