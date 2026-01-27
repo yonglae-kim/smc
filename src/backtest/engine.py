@@ -32,15 +32,22 @@ def _slice_index_df(
     idx_kosdaq: Optional[pd.DataFrame],
     dt: pd.Timestamp,
     min_bars: int,
-) -> Optional[pd.DataFrame]:
+) -> tuple[Optional[pd.DataFrame], Optional[str]]:
     index_df = None
-    if meta.get("market") == "KOSPI" and idx_kospi is not None and len(idx_kospi) > 0:
+    market = meta.get("market")
+    if market == "KOSPI":
+        if idx_kospi is None or len(idx_kospi) == 0:
+            return None, "index_short_kospi"
         index_df = idx_kospi[idx_kospi["date"] <= dt].copy()
-    elif meta.get("market") == "KOSDAQ" and idx_kosdaq is not None and len(idx_kosdaq) > 0:
+        if len(index_df) < min_bars:
+            return None, "index_short_kospi"
+    elif market == "KOSDAQ":
+        if idx_kosdaq is None or len(idx_kosdaq) == 0:
+            return None, "index_short_kosdaq"
         index_df = idx_kosdaq[idx_kosdaq["date"] <= dt].copy()
-    if index_df is not None and len(index_df) < min_bars:
-        return None
-    return index_df
+        if len(index_df) < min_bars:
+            return None, "index_short_kosdaq"
+    return index_df, None
 
 
 def run_backtest(
@@ -112,6 +119,8 @@ def run_backtest(
         "no_df": 0,
         "short_df": 0,
         "short_slice": 0,
+        "index_short_kospi": 0,
+        "index_short_kosdaq": 0,
         "no_ctx": 0,
         "strategy_exclude": 0,
         "candidates": 0,
@@ -152,9 +161,14 @@ def run_backtest(
                 meta = next((m for m in symbols_meta if m["symbol"] == sym), None)
                 if meta is not None:
                     df_slice = df[df["date"] <= dt].copy()
-                    index_df = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
+                    index_df, index_reason = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
+                    if index_reason:
+                        stats[index_reason] += 1
                     ctx = analyze_symbol(meta, df_slice, index_df, cfg)
                     if ctx:
+                        if index_df is None and index_reason:
+                            ctx["regime_reason"] = index_reason
+                            ctx["rs_reason"] = index_reason
                         ctx["regime"] = (
                             compute_regime(index_df, cfg)
                             if index_df is not None
@@ -284,13 +298,18 @@ def run_backtest(
                     stats["short_slice"] += 1
                     continue
 
-                index_df = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
+                index_df, index_reason = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
+                if index_reason:
+                    stats[index_reason] += 1
 
                 ctx = analyze_symbol(meta, df_slice, index_df, cfg)
                 if ctx is None:
                     stats["no_ctx"] += 1
                     continue
 
+                if index_df is None and index_reason:
+                    ctx["regime_reason"] = index_reason
+                    ctx["rs_reason"] = index_reason
                 ctx["regime"] = (
                     compute_regime(index_df, cfg)
                     if index_df is not None
@@ -363,6 +382,13 @@ def run_backtest(
 
         if day_i % 50 == 0:
             print("[Backtest][Stats]", stats, flush=True)
+
+    unknown_total = stats["index_short_kospi"] + stats["index_short_kosdaq"]
+    print(
+        "[Backtest] index_df 부족으로 regime/rs UNKNOWN 발생 횟수:"
+        f" total={unknown_total} kospi={stats['index_short_kospi']} kosdaq={stats['index_short_kosdaq']}",
+        flush=True,
+    )
 
     return {
         "start": str(start.date()),
