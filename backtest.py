@@ -1,5 +1,6 @@
 import argparse, os
 import json
+import pandas as pd
 from src.config import load_config
 from src.utils.http import HttpClient
 from src.providers.naver import NaverChartProvider, NaverMarketSumFetcher
@@ -48,8 +49,18 @@ def main():
         universe = [m for m in all_syms if m["symbol"] in want]
 
     # ensure index data
-    idx_kospi = loader.ensure_index("KOSPI", count=max(int(cfg.regime.index_lookback_days), int(cfg.backtest.max_fetch_count)))
-    idx_kosdaq = loader.ensure_index("KOSDAQ", count=max(int(cfg.regime.index_lookback_days), int(cfg.backtest.max_fetch_count)))
+    start_dt = pd.to_datetime(cfg.backtest.start)
+    end_dt = pd.to_datetime(cfg.backtest.end)
+    backtest_days = max(0, (end_dt - start_dt).days)
+    min_regime_bars = int(getattr(cfg.regime, "min_regime_bars", cfg.regime.index_lookback_days))
+    required_index_count = max(min_regime_bars, backtest_days + min_regime_bars)
+    index_fetch_count = max(
+        int(cfg.regime.index_lookback_days),
+        int(cfg.backtest.max_fetch_count),
+        required_index_count,
+    )
+    idx_kospi = loader.ensure_index("KOSPI", count=index_fetch_count, min_count=required_index_count)
+    idx_kosdaq = loader.ensure_index("KOSDAQ", count=index_fetch_count, min_count=required_index_count)
     print("[Backtest] idx_kospi rows:", 0 if idx_kospi is None else len(idx_kospi), flush=True)
     print("[Backtest] idx_kosdaq rows:", 0 if idx_kosdaq is None else len(idx_kosdaq), flush=True)
     if (idx_kospi is None or len(idx_kospi)==0) and (idx_kosdaq is None or len(idx_kosdaq)==0):

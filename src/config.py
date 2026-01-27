@@ -42,7 +42,8 @@ class ScoringCfg(BaseModel):
     top_detail: int = 50
 
 class RegimeCfg(BaseModel):
-    index_lookback_days: int = 260
+    index_lookback_days: int = 520
+    min_regime_bars: int = 260
     rs_lookback_days: int = 60
     atr_spike_mult: float = 1.8
 
