@@ -47,9 +47,9 @@ class TradeRules:
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
         self.early_exit_rsi_macd_enabled = bool(getattr(trade, "early_exit_rsi_macd_enabled", True))
-        self.early_exit_rsi_macd_days = int(getattr(trade, "early_exit_rsi_macd_days", 3))
+        self.early_exit_rsi_macd_days = int(getattr(trade, "early_exit_rsi_macd_days", 4))
         self.early_exit_rsi_threshold = float(getattr(trade, "early_exit_rsi_threshold", 45.0))
-        self.early_exit_macd_hist_threshold = float(getattr(trade, "early_exit_macd_hist_threshold", 0.0))
+        self.early_exit_macd_hist_threshold = float(getattr(trade, "early_exit_macd_hist_threshold", -0.02))
         self.early_exit_bear_trend_enabled = bool(getattr(trade, "early_exit_bear_trend_enabled", True))
         self.early_exit_ma20_slope_atr_threshold = float(
             getattr(trade, "early_exit_ma20_slope_atr_threshold", 0.0)

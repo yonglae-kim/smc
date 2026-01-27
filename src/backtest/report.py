@@ -36,6 +36,31 @@ details summary{cursor:pointer;color:#333}
 
 <div class="card">
   <h2>거래 내역</h2>
+  {% if early_exit_summary %}
+  <h3>조기 EXIT별 평균 RR/PNL</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>조기 EXIT 사유</th>
+        <th>건수</th>
+        <th>평균 RR</th>
+        <th>평균 PnL</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in early_exit_summary %}
+      <tr>
+        <td>{{ item.reason }}</td>
+        <td>{{ item.count }}</td>
+        <td>{% if item.avg_rr is not none %}{{ "%.2f"|format(item.avg_rr) }}{% else %}-{% endif %}</td>
+        <td>{% if item.avg_pnl is not none %}{{ "%.0f"|format(item.avg_pnl) }}{% else %}-{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="small">조기 EXIT 기록이 없습니다.</div>
+  {% endif %}
   <table>
     <thead>
       <tr>
@@ -143,6 +168,42 @@ def _split_reasons(text: str) -> list[str]:
     parts = [p.strip() for p in re.split(r"[;\n]+", text) if p.strip()]
     return parts
 
+def _early_exit_summary(trades: list[dict]) -> list[dict]:
+    summary: dict[str, dict[str, float]] = {}
+    for trade in trades:
+        reason_text = trade.get("exit_reason", "") or ""
+        if "조기 EXIT" not in reason_text:
+            continue
+        reason_lines = _split_reasons(reason_text)
+        reason_label = next((line for line in reason_lines if "조기 EXIT" in line), "조기 EXIT")
+        bucket = summary.setdefault(
+            reason_label,
+            {"count": 0.0, "total_rr": 0.0, "rr_count": 0.0, "total_pnl": 0.0},
+        )
+        bucket["count"] += 1
+        pnl = trade.get("pnl")
+        if isinstance(pnl, (int, float)):
+            bucket["total_pnl"] += float(pnl)
+        rr_val = trade.get("rr_realized")
+        if isinstance(rr_val, (int, float)):
+            bucket["total_rr"] += float(rr_val)
+            bucket["rr_count"] += 1
+    rows = []
+    for reason, bucket in summary.items():
+        count = int(bucket["count"])
+        avg_rr = bucket["total_rr"] / bucket["rr_count"] if bucket["rr_count"] > 0 else None
+        avg_pnl = bucket["total_pnl"] / count if count > 0 else None
+        rows.append(
+            {
+                "reason": reason,
+                "count": count,
+                "avg_rr": avg_rr,
+                "avg_pnl": avg_pnl,
+            }
+        )
+    rows.sort(key=lambda item: item["count"], reverse=True)
+    return rows
+
 def render_backtest_report(path: str, payload: Dict[str,Any]) -> None:
     payload = dict(payload)
     trades = []
@@ -157,6 +218,7 @@ def render_backtest_report(path: str, payload: Dict[str,Any]) -> None:
         ]
         trades.append(trade)
     payload["trades"] = trades
+    payload["early_exit_summary"] = _early_exit_summary(trades)
     payload["equity_png"] = _equity_png(payload.get("equity_curve", []))
     html = HTML.render(**payload)
     with open(path, "w", encoding="utf-8") as f:

@@ -81,9 +81,9 @@ trade:
   tp_sl_conflict: conservative
   trail_atr_mult: 0.0
   early_exit_rsi_macd_enabled: true
-  early_exit_rsi_macd_days: 3
+  early_exit_rsi_macd_days: 4
   early_exit_rsi_threshold: 45
-  early_exit_macd_hist_threshold: 0.0
+  early_exit_macd_hist_threshold: -0.02
   early_exit_bear_trend_enabled: true
   early_exit_ma20_slope_atr_threshold: 0.0
   tp1_risk_reduction_enabled: true
