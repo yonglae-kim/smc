@@ -157,8 +157,14 @@ class TradeRules:
             min_score += self.min_score_regime_non_tailwind_add
             if regime_tag == "HEADWIND":
                 min_score += self.min_score_regime_headwind_add
+        breakdown = eval_result.get("breakdown", {}) or {}
+        structure_score = _safe_float(breakdown.get("structure"), 0.0)
+        if structure_score < 0:
+            min_score += 1.5
         gates = dict(eval_result.get("gates", {}))
         gate_reasons = list(eval_result.get("gate_reasons", []))
+        if structure_score < 0:
+            gate_reasons.append("구조 점수 음수: 최소 점수 상향")
         gates["score_min"] = score >= min_score
         gates["min_rr"] = entry_plan.rr >= self.min_rr
         gates["min_expected_return"] = entry_plan.expected_return >= self.min_expected_return
@@ -176,7 +182,7 @@ class TradeRules:
             reasons=reasons,
             gates=gates,
             gate_reasons=gate_reasons,
-            score_breakdown=eval_result.get("breakdown", {}),
+            score_breakdown=breakdown,
             invalidation=entry_plan.invalidation,
         )
         return signal, entry_plan
