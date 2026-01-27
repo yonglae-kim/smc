@@ -55,8 +55,8 @@ class TradeRules:
             getattr(trade, "early_exit_ma20_slope_atr_threshold", 0.0)
         )
         self.tp1_risk_reduction_enabled = bool(getattr(trade, "tp1_risk_reduction_enabled", True))
-        self.tp1_stop_atr_buffer = float(getattr(trade, "tp1_stop_atr_buffer", 0.25))
-        self.tp1_trail_atr_mult = float(getattr(trade, "tp1_trail_atr_mult", 0.0))
+        self.tp1_stop_atr_buffer = float(getattr(trade, "tp1_stop_atr_buffer", 0.5))
+        self.tp1_trail_atr_mult = float(getattr(trade, "tp1_trail_atr_mult", 1.0))
         self.min_score_regime_non_tailwind_add = float(
             getattr(trade, "min_score_regime_non_tailwind_add", 0.5)
         )
@@ -266,11 +266,18 @@ class TradeRules:
     def apply_tp1_risk_reduction(self, position: Position, ctx: Optional[Dict[str, Any]]) -> None:
         if not self.tp1_risk_reduction_enabled:
             return
-        atr = _safe_float((ctx or {}).get("atr14"), position.entry_atr or 0.0)
+        ctx = ctx or {}
+        atr = _safe_float(ctx.get("atr14"), position.entry_atr or 0.0)
+        stop_candidates = [position.stop_loss]
         if atr > 0 and self.tp1_stop_atr_buffer > 0:
-            new_stop = position.entry_price + self.tp1_stop_atr_buffer * atr
-            if new_stop > position.stop_loss:
-                position.stop_loss = new_stop
+            stop_candidates.append(position.entry_price + self.tp1_stop_atr_buffer * atr)
+        if atr > 0 and self.tp1_trail_atr_mult > 0:
+            close_px = _safe_float(ctx.get("close"), 0.0)
+            if close_px > 0:
+                stop_candidates.append(close_px - atr * self.tp1_trail_atr_mult)
+        new_stop = max(stop_candidates)
+        if new_stop > position.stop_loss:
+            position.stop_loss = new_stop
         if self.tp1_trail_atr_mult > 0 and (
             position.trail is None or self.tp1_trail_atr_mult > position.trail
         ):
