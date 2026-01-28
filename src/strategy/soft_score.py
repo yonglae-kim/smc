@@ -28,11 +28,6 @@ class SoftScoreStrategy(Strategy):
         self.dist_ob_levels = p.get("dist_ob_levels", [(0.3, 4), (0.6, 2), (1.0, 1)])
         self.dist_fvg_levels = p.get("dist_fvg_levels", [(0.3, 2), (0.6, 1)])
         self.w_confluence = float(p.get("w_confluence", 2.0))
-        self.w_regime_tailwind = float(p.get("w_regime_tailwind", 2.0))
-        self.w_regime_headwind = float(p.get("w_regime_headwind", -2.0))
-        self.w_rs_strong = float(p.get("w_rs_strong", 1.0))
-        self.w_rs_weak = float(p.get("w_rs_weak", -1.0))
-        self.w_atr_spike = float(p.get("w_atr_spike", -2.0))
         self.w_struct_bull = float(p.get("w_struct_bull", 1.0))
         self.w_struct_bear = float(p.get("w_struct_bear", -1.0))
         self.w_above_ma200 = float(p.get("w_above_ma200", 1.0))
@@ -56,6 +51,8 @@ class SoftScoreStrategy(Strategy):
         self.atr_ratio_high = float(p.get("atr_ratio_high", 1.4))
         self.w_atr_ratio_low = float(p.get("w_atr_ratio_low", 0.75))
         self.w_atr_ratio_high = float(p.get("w_atr_ratio_high", -1.0))
+        self.w_vol_adj_return_20 = float(p.get("w_vol_adj_return_20", 1.0))
+        self.vol_adj_return_20_threshold = float(p.get("vol_adj_return_20_threshold", 1.0))
         self.ob_quality_strong = float(p.get("ob_quality_strong", 2.0))
         self.ob_quality_min = float(p.get("ob_quality_min", 1.0))
         self.w_ob_quality_strong = float(p.get("w_ob_quality_strong", 1.0))
@@ -64,8 +61,7 @@ class SoftScoreStrategy(Strategy):
         self.w_ob_age_old = float(p.get("w_ob_age_old", -0.5))
         self.fvg_age_max = int(p.get("fvg_age_max", 60))
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
-        self.require_tailwind = bool(p.get("require_tailwind", False))
-        self.require_above_ma200 = bool(p.get("require_above_ma200", False))
+        self.require_positive_momentum_60 = bool(p.get("require_positive_momentum_60", False))
         self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(p.get("ma_slope_gate"))
         self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
         trade_cfg = getattr(cfg, "trade", None)
@@ -93,10 +89,10 @@ class SoftScoreStrategy(Strategy):
         if stop_distance_atr is not None:
             gate_metrics["stop_distance_atr"] = stop_distance_atr
 
-        regime = (ctx.get("regime") or {})
-        rtag = regime.get("tag")
-        gates["regime_tailwind"] = (not self.require_tailwind) or (rtag == "TAILWIND")
-        gates["above_ma200"] = (not self.require_above_ma200) or bool(ctx.get("above_ma200"))
+        momentum_60 = ctx.get("momentum_60")
+        gates["positive_momentum_60"] = (not self.require_positive_momentum_60) or (
+            momentum_60 is not None and momentum_60 > 0
+        )
         structure_bias = ctx.get("structure_bias")
         ma20_slope_atr = ctx.get("ma20_slope_atr")
         gates["trend_quality"] = (
@@ -140,34 +136,6 @@ class SoftScoreStrategy(Strategy):
             breakdown["confluence"] = self.w_confluence
         else:
             breakdown["confluence"] = 0.0
-
-        regime = (ctx.get("regime") or {})
-        rtag = regime.get("tag")
-        if rtag == "TAILWIND":
-            score += self.w_regime_tailwind
-            breakdown["regime"] = self.w_regime_tailwind
-        elif rtag == "HEADWIND":
-            score += self.w_regime_headwind
-            breakdown["regime"] = self.w_regime_headwind
-        else:
-            breakdown["regime"] = 0.0
-
-        rs = (ctx.get("rs") or {})
-        rst = rs.get("tag")
-        if rst == "RS_STRONG":
-            score += self.w_rs_strong
-            breakdown["rs"] = self.w_rs_strong
-        elif rst == "RS_WEAK":
-            score += self.w_rs_weak
-            breakdown["rs"] = self.w_rs_weak
-        else:
-            breakdown["rs"] = 0.0
-
-        if regime.get("atr_spike") is True:
-            score += self.w_atr_spike
-            breakdown["atr_spike"] = self.w_atr_spike
-        else:
-            breakdown["atr_spike"] = 0.0
 
         st = ctx.get("structure_bias")
         if st == "BULL":
@@ -263,6 +231,13 @@ class SoftScoreStrategy(Strategy):
             breakdown["atr_ratio"] = self.w_atr_ratio_high
         else:
             breakdown["atr_ratio"] = 0.0
+
+        vol_adj_return_20 = ctx.get("vol_adj_return_20")
+        if vol_adj_return_20 is not None and vol_adj_return_20 >= self.vol_adj_return_20_threshold:
+            score += self.w_vol_adj_return_20
+            breakdown["vol_adj_return_20"] = self.w_vol_adj_return_20
+        else:
+            breakdown["vol_adj_return_20"] = 0.0
 
         ob_quality = ctx.get("ob_quality")
         if ob_quality is not None and ob_quality >= self.ob_quality_strong:
