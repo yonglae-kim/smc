@@ -8,11 +8,11 @@ from .analysis.smc.pivots import fractal_pivots, classify_structure
 from .analysis.smc.structure import bos_choch
 from .analysis.smc.fvg import detect_fvgs
 from .analysis.smc.ob import detect_ob_from_bos
-from .regime.regime import relative_strength
+from .regime.regime import compute_regime, relative_strength
 from .signals.ma_slope_gate import compute_ma_slope_metrics, normalize_ma_slope_gate_config
 from .scoring import score_candidate
 
-def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.DataFrame, cfg) -> Optional[Dict[str,Any]]:
+def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optional[Dict[str,Any]]:
     """Compute features + SMC context. Returns context dict suitable for scoring/report."""
     if df is None or len(df) < 60:
         return None
@@ -137,13 +137,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         confluence = bool(overlap or near)
 
 
-    if index_df is None or len(index_df)==0:
-
-        rs = {"tag": "UNKNOWN", "rs": None, "sym_ret": None, "idx_ret": None}
-
-    else:
-
-        rs = relative_strength(df, index_df, int(cfg.regime.rs_lookback_days))
+    rs = relative_strength(df, int(cfg.regime.rs_lookback_days))
+    regime = compute_regime(df, cfg)
 
     trade_cfg = getattr(cfg, "trade", None)
     early_exit_days = int(getattr(trade_cfg, "early_exit_rsi_macd_days", 0)) if trade_cfg is not None else 0
@@ -207,11 +202,12 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, index_df: pd.Da
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,
         "rs": rs,
+        "regime": regime,
         "pivots": [{"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength} for p in piv[-40:]],
         "structure_points": struct_pts[-20:],
         "notes": [
             f"Fractal pivot confirmation lag: last {cfg.analysis.fractal_n} bars are unconfirmed for pivots."
         ]
     }
-    # scoring is done after regime injection (runner)
+    # scoring is done by the caller
     return ctx

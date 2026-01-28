@@ -1,6 +1,5 @@
 import argparse, os
 import json
-import pandas as pd
 from src.config import load_config
 from src.utils.http import HttpClient
 from src.providers.naver import NaverChartProvider, NaverMarketSumFetcher
@@ -47,25 +46,6 @@ def main():
         all_syms = fetcher.fetch_all_symbols()
         want = set(cfg.backtest.symbols)
         universe = [m for m in all_syms if m["symbol"] in want]
-
-    # ensure index data
-    start_dt = pd.to_datetime(cfg.backtest.start)
-    end_dt = pd.to_datetime(cfg.backtest.end)
-    backtest_days = max(0, (end_dt - start_dt).days)
-    min_regime_bars = int(getattr(cfg.regime, "min_regime_bars", cfg.regime.index_lookback_days))
-    required_index_count = max(min_regime_bars, backtest_days + min_regime_bars)
-    index_fetch_count = max(
-        int(cfg.regime.index_lookback_days),
-        int(cfg.backtest.max_fetch_count),
-        required_index_count,
-    )
-    idx_kospi = loader.ensure_index("KOSPI", count=index_fetch_count, min_count=required_index_count)
-    idx_kosdaq = loader.ensure_index("KOSDAQ", count=index_fetch_count, min_count=required_index_count)
-    print("[Backtest] idx_kospi rows:", 0 if idx_kospi is None else len(idx_kospi), flush=True)
-    print("[Backtest] idx_kosdaq rows:", 0 if idx_kosdaq is None else len(idx_kosdaq), flush=True)
-    if (idx_kospi is None or len(idx_kospi)==0) and (idx_kosdaq is None or len(idx_kosdaq)==0):
-        print("[Backtest][WARN] Index data is empty. Calendar will fallback to symbol dates; regime/RS will be limited.", flush=True)
-
 
     # ensure OHLCV even if not cached (on-demand fetch for each symbol)
     print(f"[Backtest] Ensuring OHLCV for {len(universe)} symbols (auto-fetch if missing)", flush=True)
@@ -116,7 +96,7 @@ def main():
 
     print("[Backtest] Running simulation", flush=True)
     strat = SoftScoreStrategy(cfg)
-    result = run_backtest(universe, ohlcv_map, idx_kospi, idx_kosdaq, cfg, strat, on_update=on_update)
+    result = run_backtest(universe, ohlcv_map, cfg, strat, on_update=on_update)
     metrics = compute_metrics(result)
 
     with open(result_path, "w", encoding="utf-8") as f:
