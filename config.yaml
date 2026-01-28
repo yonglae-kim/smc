@@ -71,15 +71,16 @@ trade:
   min_risk_ratio: 0.001
   stop_atr_mult: 1.5
   tp_rr_target: 2.0
-  tp_partial_rr: 1.0
-  tp_partial_size: 0.5
-  move_stop_to_entry: true
-  max_hold_days: 20
+  tp_partial_rr: 1.2 # 부분익절을 1.2R로 상향해 잔량 추세 추종 여지 확보
+  tp_partial_size: 0.4 # 일부(40%)만 익절해 잔량(60%) 추세 추종 강화
+  move_stop_to_entry: true # 부분익절 후 손절을 본전으로 이동해 리스크 축소
+  max_hold_days: 30 # 보유기간 제한 완화로 추세 지속 구간 확보
   score_exit_threshold: 2.0
   exit_on_structure_break: true
+  structure_break_quality_min: 0.2 # BOS 품질 문턱을 낮춰 구조 붕괴 감지 민감도 강화
   exit_on_score_drop: true
   tp_sl_conflict: conservative
-  trail_atr_mult: 0.0
+  trail_atr_mult: 1.2 # ATR 트레일링 활성화로 되돌림 구간 방어 강화
   early_exit_rsi_macd_enabled: true
   early_exit_rsi_macd_days: 4
   early_exit_rsi_threshold: 45
@@ -88,7 +89,7 @@ trade:
   early_exit_ma20_slope_atr_threshold: 0.0
   tp1_risk_reduction_enabled: true
   tp1_stop_atr_buffer: 0.25
-  tp1_trail_atr_mult: 0.0
+  tp1_trail_atr_mult: 1.0 # 1차 익절 이후 잔량에 트레일링 적용
 backtest:
   start: '2025-01-01'
   end: '2025-12-31'
@@ -135,9 +136,9 @@ backtest:
       require_close_confirm_for_sell: true
   tp:
     rr_target: 2.0
-    partial_rr: 1.0
-    partial_size: 0.5
-    move_stop_to_entry: true
+    partial_rr: 1.2 # 실거래 설정과 동일하게 부분익절 기준 상향
+    partial_size: 0.4 # 부분익절 비중을 줄여 잔량 추세 추종 강화
+    move_stop_to_entry: true # 부분익절 후 손절 본전 이동
   strategy: ob_pullback
   symbols: ["005930","000660","035420","051910","035720"] # TOP500
 #  symbols: TOP500

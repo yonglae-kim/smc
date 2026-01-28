@@ -30,6 +30,26 @@ details summary{cursor:pointer;color:#333}
 <div class="small">기간 {{ start }} ~ {{ end }} · 거래 {{ metrics.get('trades', 0) }} · MDD {{ "%.2f"|format(metrics.get('mdd')*100) if metrics.get('mdd') is not none else "" }}% · 샤프 {{ "%.2f"|format(metrics.get('sharpe')) if metrics.get('sharpe') is not none else "" }} · 승률 {{ "%.1f"|format(metrics.get('winrate')*100) if metrics.get('winrate') is not none else "" }}%</div>
 
 <div class="card">
+  <h2>요약 지표</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>승률</th>
+        <th>평균 PnL</th>
+        <th>평균 보유기간</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{% if metrics.get('winrate') is not none %}{{ "%.1f"|format(metrics.get('winrate')*100) }}%{% else %}-{% endif %}</td>
+        <td>{% if metrics.get('avg_pnl') is not none %}{{ "%.0f"|format(metrics.get('avg_pnl')) }}{% else %}-{% endif %}</td>
+        <td>{% if metrics.get('avg_hold_days') is not none %}{{ "%.1f"|format(metrics.get('avg_hold_days')) }}일{% else %}-{% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
   <h2>에퀴티 커브</h2>
   <img style="width:100%;border-radius:10px;border:1px solid #eee" src="data:image/png;base64,{{ equity_png }}"/>
 </div>
