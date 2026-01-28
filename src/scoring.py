@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 import math
 
 def score_candidate(ctx: Dict[str,Any], weights: Dict[str,float]) -> Dict[str,Any]:
-    """Explainable additive score. ctx contains tags + distances + regime + rs."""
+    """Explainable additive score. ctx contains tags + distances + momentum + trend metrics."""
     s = 0.0
     contrib = []
 
@@ -42,12 +42,15 @@ def score_candidate(ctx: Dict[str,Any], weights: Dict[str,float]) -> Dict[str,An
     volume_ratio = ctx.get("volume_ratio")
     add("volume_surge", volume_ratio is not None and volume_ratio >= 1.3, volume_ratio)
 
-    # RS + regime
-    add("rs_strong", ctx.get("rs",{}).get("tag")=="RS_STRONG")
-    reg_tag = ctx.get("regime",{}).get("tag")
-    add("regime_tailwind", reg_tag=="TAILWIND")
-    add("regime_headwind", reg_tag=="HEADWIND")
-    add("atr_spike_risk", ctx.get("regime",{}).get("atr_spike", False))
+    # momentum + trend strength
+    momentum_20 = ctx.get("momentum_20")
+    add("momentum_20_positive", momentum_20 is not None and momentum_20 > 0, momentum_20)
+    momentum_60 = ctx.get("momentum_60")
+    add("momentum_60_positive", momentum_60 is not None and momentum_60 > 0, momentum_60)
+    ma20_slope_atr = ctx.get("ma20_slope_atr")
+    add("ma20_slope_strong", ma20_slope_atr is not None and ma20_slope_atr >= 0.15, ma20_slope_atr)
+    vol_adj_return_20 = ctx.get("vol_adj_return_20")
+    add("vol_adj_return_20", vol_adj_return_20 is not None and vol_adj_return_20 >= 1.0, vol_adj_return_20)
 
     ctx["score"] = float(s)
     ctx["score_components"] = contrib

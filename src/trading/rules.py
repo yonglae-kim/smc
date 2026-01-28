@@ -57,10 +57,6 @@ class TradeRules:
         self.tp1_risk_reduction_enabled = bool(getattr(trade, "tp1_risk_reduction_enabled", True))
         self.tp1_stop_atr_buffer = float(getattr(trade, "tp1_stop_atr_buffer", 0.5))
         self.tp1_trail_atr_mult = float(getattr(trade, "tp1_trail_atr_mult", 1.0))
-        self.min_score_regime_non_tailwind_add = float(
-            getattr(trade, "min_score_regime_non_tailwind_add", 0.5)
-        )
-        self.min_score_regime_headwind_add = float(getattr(trade, "min_score_regime_headwind_add", 1.5))
         self.ob_quality_gate_min = float(getattr(trade, "ob_quality_gate_min", 0.0))
         self.ob_quality_gate_penalty = float(getattr(trade, "ob_quality_gate_penalty", 1.0))
         self.ob_age_gate_max = int(getattr(trade, "ob_age_gate_max", 90))
@@ -185,11 +181,6 @@ class TradeRules:
         entry_plan = self.build_entry_plan(ctx, entry_price)
         score = float(eval_result["score"])
         min_score = max(self.min_score, float(eval_result.get("threshold", 0.0)))
-        regime_tag = (ctx.get("regime") or {}).get("tag")
-        if regime_tag != "TAILWIND":
-            min_score += self.min_score_regime_non_tailwind_add
-            if regime_tag == "HEADWIND":
-                min_score += self.min_score_regime_headwind_add
         breakdown = eval_result.get("breakdown", {}) or {}
         structure_score = _safe_float(breakdown.get("structure"), 0.0)
         if structure_score < 0:
@@ -527,12 +518,9 @@ class TradeRules:
             reasons.append("구조 바이어스: 상승(HH/HL 구조).")
         if ctx.get("tag_confluence_ob_fvg"):
             reasons.append("OB/FVG 컨플루언스 구간으로 신뢰도 가점.")
-        rs_tag = (ctx.get("rs") or {}).get("tag")
-        if rs_tag == "RS_STRONG":
-            reasons.append("상대강도 우수(지수 대비 강세).")
-        regime_tag = (ctx.get("regime") or {}).get("tag")
-        if regime_tag == "TAILWIND":
-            reasons.append("시장 레짐 우호(상승/완만 변동성 구간).")
+        momentum_60 = ctx.get("momentum_60")
+        if momentum_60 is not None and momentum_60 > 0:
+            reasons.append("60일 모멘텀 양호.")
         entry_type_map = {
             "limit_pullback": "되돌림 지정가",
             "limit_in_zone": "구간 내부 지정가",
@@ -568,9 +556,6 @@ class TradeRules:
             "dist_ob": "OB 근접도 가산점",
             "dist_fvg": "FVG 근접도 가산점",
             "confluence": "OB/FVG 컨플루언스",
-            "regime": "시장 레짐 가중치",
-            "rs": "상대강도 가중치",
-            "atr_spike": "ATR 변동성 스파이크 패널티",
             "structure": "구조 바이어스 가중치",
             "above_ma200": "MA200 상단 가중치",
             "above_ma20": "MA20 상단 가중치",
@@ -584,6 +569,7 @@ class TradeRules:
             "momentum_60": "60일 모멘텀 가중치",
             "ma20_slope": "MA20 기울기 가중치",
             "atr_ratio": "ATR 비율 가중치",
+            "vol_adj_return_20": "20일 변동성 대비 수익 가중치",
             "ob_quality": "OB 품질 가중치",
             "ob_age": "OB 노후 패널티",
             "fvg_age": "FVG 노후 패널티",

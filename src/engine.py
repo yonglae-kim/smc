@@ -78,6 +78,9 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         volume_ratio = float(volume_last / (vol_sma20_last + 1e-9))
     momentum_20 = float(last["momentum_20"]) if not pd.isna(last["momentum_20"]) else None
     momentum_60 = float(last["momentum_60"]) if not pd.isna(last["momentum_60"]) else None
+    vol_adj_return_20 = None
+    if momentum_20 is not None and atr_last and close:
+        vol_adj_return_20 = float(momentum_20 / max(atr_last / close, 1e-9))
     ma20_slope_atr = float(last["ma20_slope_atr"]) if not pd.isna(last["ma20_slope_atr"]) else None
     ma_slope_fast = float(ma_gate_row["ma_fast"]) if ma_gate_row is not None else None
     ma_slope_slow = float(ma_gate_row["ma_slow"]) if ma_gate_row is not None else None
@@ -176,6 +179,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         "volume_ratio": volume_ratio,
         "momentum_20": momentum_20,
         "momentum_60": momentum_60,
+        "vol_adj_return_20": vol_adj_return_20,
         "ma20_slope_atr": ma20_slope_atr,
         "room_to_high_atr": room_to_high_atr,
         "recent_high_20": recent_high_20,
