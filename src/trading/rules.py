@@ -43,6 +43,7 @@ class TradeRules:
         self.max_hold_days = int(getattr(trade, "max_hold_days", 20))
         self.score_exit_threshold = float(getattr(trade, "score_exit_threshold", 0.0))
         self.exit_on_structure_break = bool(getattr(trade, "exit_on_structure_break", True))
+        self.structure_break_quality_min = float(getattr(trade, "structure_break_quality_min", 0.0))
         self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
         self.tp_sl_conflict = str(getattr(trade, "tp_sl_conflict", "conservative"))
         self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
@@ -481,9 +482,20 @@ class TradeRules:
 
         if ctx is not None:
             if self.exit_on_structure_break:
-                bos_dir = (ctx.get("bos") or {}).get("direction")
-                if ctx.get("structure_bias") == "BEAR" or bos_dir == "DOWN":
-                    decisions.append(ExitDecision(action="EXIT", reason="구조 붕괴/하락 전환(BOS)", price=close_px))
+                bos = ctx.get("bos") or {}
+                bos_dir = bos.get("direction")
+                bos_quality = _safe_float(bos.get("quality"), 0.0)
+                if ctx.get("structure_bias") == "BEAR":
+                    decisions.append(ExitDecision(action="EXIT", reason="구조 붕괴/하락 전환(BEAR bias)", price=close_px))
+                    return decisions
+                if bos_dir in ("BEAR", "DOWN") and bos_quality >= self.structure_break_quality_min:
+                    decisions.append(
+                        ExitDecision(
+                            action="EXIT",
+                            reason=f"구조 붕괴/하락 전환(BOS, q≥{self.structure_break_quality_min:.2f})",
+                            price=close_px,
+                        )
+                    )
                     return decisions
 
             if self.exit_on_score_drop:

@@ -71,6 +71,7 @@ class TradeCfg(BaseModel):
     max_hold_days: int = 20
     score_exit_threshold: float = 2.0
     exit_on_structure_break: bool = True
+    structure_break_quality_min: float = 0.0
     exit_on_score_drop: bool = True
     tp_sl_conflict: str = "conservative"  # conservative | optimistic
     trail_atr_mult: float = 0.0
