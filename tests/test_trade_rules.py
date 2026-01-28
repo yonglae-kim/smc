@@ -167,8 +167,7 @@ def test_end_to_end_smoke():
             "volume": 100000,
         }
     )
-    idx_df = df.copy()
     symbols = [{"symbol": "000000", "name": "Sample", "market": "KOSPI"}]
-    result = run_backtest(symbols, {"000000": df}, idx_df, idx_df, cfg, strategy)
+    result = run_backtest(symbols, {"000000": df}, cfg, strategy)
     assert "equity_curve" in result
     assert result["start"] == "2024-01-01"

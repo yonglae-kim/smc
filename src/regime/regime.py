@@ -36,16 +36,11 @@ def compute_regime(index_df: pd.DataFrame, cfg) -> Dict[str, Any]:
         "tag": "TAILWIND" if (above_ma200 and rsi_ge_50) else ("HEADWIND" if ((not above_ma200) and (not rsi_ge_50)) else "MIXED")
     }
 
-def relative_strength(symbol_df: pd.DataFrame, index_df: pd.DataFrame, lookback: int) -> Dict[str, Any]:
+def relative_strength(symbol_df: pd.DataFrame, lookback: int) -> Dict[str, Any]:
     s = symbol_df.set_index("date")["close"]
-    i = index_df.set_index("date")["close"]
-    common = s.index.intersection(i.index)
-    if len(common) < lookback + 5:
+    if len(s) < lookback + 5:
         return {"tag": "RS_UNKNOWN"}
-    s = s.loc[common].tail(lookback+1)
-    i = i.loc[common].tail(lookback+1)
-    sret = (s.iloc[-1]/s.iloc[0]) - 1.0
-    iret = (i.iloc[-1]/i.iloc[0]) - 1.0
-    diff = sret - iret
-    tag = "RS_STRONG" if diff > 0.02 else ("RS_WEAK" if diff < -0.02 else "RS_NEUTRAL")
-    return {"tag": tag, "symbol_ret": float(sret), "index_ret": float(iret), "diff": float(diff)}
+    s = s.tail(lookback + 1)
+    sret = (s.iloc[-1] / s.iloc[0]) - 1.0
+    tag = "RS_STRONG" if sret > 0.02 else ("RS_WEAK" if sret < -0.02 else "RS_NEUTRAL")
+    return {"tag": tag, "symbol_ret": float(sret)}

@@ -5,7 +5,6 @@ from typing import Dict, Any, List, Optional, Callable
 import pandas as pd
 
 from ..engine import analyze_symbol
-from ..regime.regime import compute_regime
 from ..scoring import score_candidate
 from ..strategy.base import Strategy
 from ..trading.models import Position
@@ -17,44 +16,9 @@ def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
     return px * (1.0 + (fee_bps + slippage_bps) / 10000.0)
 
 
-def _required_regime_bars(cfg) -> int:
-    ma_slow = int(getattr(cfg.analysis, "ma_slow", 200))
-    rsi_period = int(getattr(cfg.analysis, "rsi_period", 14))
-    atr_period = int(getattr(cfg.analysis, "atr_period", 14))
-    rs_lookback = int(getattr(cfg.regime, "rs_lookback_days", 60))
-    min_regime_bars = int(getattr(cfg.regime, "min_regime_bars", 0))
-    return max(200, ma_slow, rsi_period + 1, atr_period + 60, rs_lookback + 5, min_regime_bars)
-
-
-def _slice_index_df(
-    meta: Dict[str, Any],
-    idx_kospi: Optional[pd.DataFrame],
-    idx_kosdaq: Optional[pd.DataFrame],
-    dt: pd.Timestamp,
-    min_bars: int,
-) -> tuple[Optional[pd.DataFrame], Optional[str]]:
-    index_df = None
-    market = meta.get("market")
-    if market == "KOSPI":
-        if idx_kospi is None or len(idx_kospi) == 0:
-            return None, "index_short_kospi"
-        index_df = idx_kospi[idx_kospi["date"] <= dt].copy()
-        if len(index_df) < min_bars:
-            return None, "index_short_kospi"
-    elif market == "KOSDAQ":
-        if idx_kosdaq is None or len(idx_kosdaq) == 0:
-            return None, "index_short_kosdaq"
-        index_df = idx_kosdaq[idx_kosdaq["date"] <= dt].copy()
-        if len(index_df) < min_bars:
-            return None, "index_short_kosdaq"
-    return index_df, None
-
-
 def run_backtest(
     symbols_meta: List[Dict[str, Any]],
     ohlcv_map: Dict[str, pd.DataFrame],
-    idx_kospi: pd.DataFrame,
-    idx_kosdaq: pd.DataFrame,
     cfg,
     strategy: Strategy,
     on_update: Optional[Callable[[Dict[str, Any], Dict[str, Any]], None]] = None,
@@ -62,22 +26,12 @@ def run_backtest(
     start = pd.to_datetime(cfg.backtest.start)
     end = pd.to_datetime(cfg.backtest.end)
 
-    # Calendar: prefer index dates, fallback to union of symbol dates.
-    idx_dates = set()
-    if idx_kospi is not None and len(idx_kospi) > 0:
-        idx_dates |= set(idx_kospi["date"])
-    if idx_kosdaq is not None and len(idx_kosdaq) > 0:
-        idx_dates |= set(idx_kosdaq["date"])
-
-    if idx_dates:
-        cal = pd.Index(sorted(idx_dates))
-    else:
-        sym_dates = set()
-        for df in ohlcv_map.values():
-            if df is not None and len(df) > 0:
-                sym_dates |= set(df["date"])
-        cal = pd.Index(sorted(sym_dates))
-
+    # Calendar: union of symbol dates.
+    sym_dates = set()
+    for df in ohlcv_map.values():
+        if df is not None and len(df) > 0:
+            sym_dates |= set(df["date"])
+    cal = pd.Index(sorted(sym_dates))
     cal = cal[(cal >= start) & (cal <= end)]
     cal = list(cal)
 
@@ -93,12 +47,6 @@ def run_backtest(
             "trades": [],
             "equity_curve": [],
         }
-
-    # normalize indexes
-    if idx_kospi is not None and len(idx_kospi) > 0:
-        idx_kospi = idx_kospi.sort_values("date").reset_index(drop=True)
-    if idx_kosdaq is not None and len(idx_kosdaq) > 0:
-        idx_kosdaq = idx_kosdaq.sort_values("date").reset_index(drop=True)
 
     trade_rules = TradeRules(cfg, strategy=strategy)
     positions: Dict[str, Position] = {}
@@ -119,16 +67,12 @@ def run_backtest(
         "no_df": 0,
         "short_df": 0,
         "short_slice": 0,
-        "index_short_kospi": 0,
-        "index_short_kosdaq": 0,
         "no_ctx": 0,
         "strategy_exclude": 0,
         "candidates": 0,
         "entered": 0,
         "exited": 0,
     }
-
-    min_regime_bars = _required_regime_bars(cfg)
 
     for dt in cal:
         day_i += 1
@@ -161,19 +105,8 @@ def run_backtest(
                 meta = next((m for m in symbols_meta if m["symbol"] == sym), None)
                 if meta is not None:
                     df_slice = df[df["date"] <= dt].copy()
-                    index_df, index_reason = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
-                    if index_reason:
-                        stats[index_reason] += 1
-                    ctx = analyze_symbol(meta, df_slice, index_df, cfg)
+                    ctx = analyze_symbol(meta, df_slice, cfg)
                     if ctx:
-                        if index_df is None and index_reason:
-                            ctx["regime_reason"] = index_reason
-                            ctx["rs_reason"] = index_reason
-                        ctx["regime"] = (
-                            compute_regime(index_df, cfg)
-                            if index_df is not None
-                            else {"tag": "UNKNOWN", "ma200": None, "rsi": None, "atr_spike": None}
-                        )
                         ctx = score_candidate(ctx, cfg.scoring.weights)
                         ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
                         trade_rules.update_trailing_stop(pos, ctx)
@@ -298,23 +231,10 @@ def run_backtest(
                     stats["short_slice"] += 1
                     continue
 
-                index_df, index_reason = _slice_index_df(meta, idx_kospi, idx_kosdaq, dt, min_regime_bars)
-                if index_reason:
-                    stats[index_reason] += 1
-
-                ctx = analyze_symbol(meta, df_slice, index_df, cfg)
+                ctx = analyze_symbol(meta, df_slice, cfg)
                 if ctx is None:
                     stats["no_ctx"] += 1
                     continue
-
-                if index_df is None and index_reason:
-                    ctx["regime_reason"] = index_reason
-                    ctx["rs_reason"] = index_reason
-                ctx["regime"] = (
-                    compute_regime(index_df, cfg)
-                    if index_df is not None
-                    else {"tag": "UNKNOWN", "ma200": None, "rsi": None, "atr_spike": None}
-                )
                 ctx = score_candidate(ctx, cfg.scoring.weights)
 
                 signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.get("close", 0.0)))
@@ -382,13 +302,6 @@ def run_backtest(
 
         if day_i % 50 == 0:
             print("[Backtest][Stats]", stats, flush=True)
-
-    unknown_total = stats["index_short_kospi"] + stats["index_short_kosdaq"]
-    print(
-        "[Backtest] index_df 부족으로 regime/rs UNKNOWN 발생 횟수:"
-        f" total={unknown_total} kospi={stats['index_short_kospi']} kosdaq={stats['index_short_kosdaq']}",
-        flush=True,
-    )
 
     return {
         "start": str(start.date()),

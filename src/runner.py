@@ -11,7 +11,6 @@ from .providers.naver import NaverChartProvider, NaverMarketSumFetcher
 from .storage.fs import FSStorage
 from .universe.builder import UniverseBuilder
 from .engine import analyze_symbol
-from .regime.regime import compute_regime
 from .scoring import score_candidate
 from .reporting.charts import plot_symbol_chart
 from .reporting.html import render_report
@@ -45,20 +44,6 @@ def run(config_path: str) -> None:
     fetcher = NaverMarketSumFetcher(http)
 
     print("[Runner] Start daily pipeline", flush=True)
-    print("[Runner] Building market regime (KOSPI/KOSDAQ)", flush=True)
-
-    # --- regime (must be split by market) ---
-    idx_kospi = provider.get_index_ohlc("KOSPI", count=int(cfg.regime.index_lookback_days))
-    idx_kosdaq = provider.get_index_ohlc("KOSDAQ", count=int(cfg.regime.index_lookback_days))
-    regime_kospi = compute_regime(idx_kospi, cfg)
-    regime_kosdaq = compute_regime(idx_kosdaq, cfg)
-    idx_dates = set()
-    if idx_kospi is not None and len(idx_kospi) > 0:
-        idx_dates |= set(idx_kospi["date"])
-    if idx_kosdaq is not None and len(idx_kosdaq) > 0:
-        idx_dates |= set(idx_kosdaq["date"])
-    cal = sorted(idx_dates)
-
     print(f"[Runner] Universe build: Top{cfg.universe.top_liquidity} (incremental/weekly policy)", flush=True)
 
     # --- universe ---
@@ -75,6 +60,7 @@ def run(config_path: str) -> None:
     done = set(st.get("done", []))
     rows=[]
     ctx_map={}
+    cal_dates = set()
     prog = Progress(total=len(universe), label="Analyze", every=25)
     done_count = len(done)
     for i, meta in enumerate(universe, start=1):
@@ -94,14 +80,11 @@ def run(config_path: str) -> None:
         if df is None or len(df) < 80:
             done.add(sym); done_count += 1; prog.tick(done_count, extra=f"skip={sym} reason=insufficient_data"); continue
 
-        index_df = idx_kospi if meta.get("market")=="KOSPI" else idx_kosdaq
-        ctx = analyze_symbol(meta, df, index_df, cfg)
+        ctx = analyze_symbol(meta, df, cfg)
         if ctx is None:
             done.add(sym); done_count += 1; prog.tick(done_count, extra=f"skip={sym} reason=insufficient_data"); continue
-
-        # inject market regime
-        ctx["regime"] = regime_kospi if meta.get("market")=="KOSPI" else regime_kosdaq
         ctx = score_candidate(ctx, cfg.scoring.weights)
+        cal_dates |= set(df["date"])
 
         # tags for report
         tags=[]
@@ -124,6 +107,8 @@ def run(config_path: str) -> None:
 
     storage.save_json(f"state/analysis_progress_{ymd}.json", {"done": sorted(list(done))})
 
+    cal = sorted(cal_dates)
+
     # Rank (candidates are still within top500 universe)
     rows_sorted = sorted(rows, key=lambda x: (-x.get("score", 0), x.get("symbol", "")))
 
@@ -137,7 +122,6 @@ def run(config_path: str) -> None:
     # snapshot
     storage.save_json(f"snapshots/{ymd}/universe.json", uni_meta)
     storage.save_json(f"snapshots/{ymd}/candidates.json", rows_sorted)
-    storage.save_json(f"snapshots/{ymd}/regime.json", {"KOSPI": regime_kospi, "KOSDAQ": regime_kosdaq})
     storage.save_json(
         f"snapshots/{ymd}/signals.json",
         [
