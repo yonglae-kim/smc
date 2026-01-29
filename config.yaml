@@ -49,7 +49,7 @@ scoring:
     ma20_slope_strong: 4
     vol_adj_return_20: 5
   top_detail: 50
-regime:
+symbol_regime:
   index_lookback_days: 520
   min_regime_bars: 260
   rs_lookback_days: 60

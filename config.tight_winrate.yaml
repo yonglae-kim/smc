@@ -54,7 +54,7 @@ scoring:
     regime_headwind: -8
     atr_spike_risk: -6
   top_detail: 50
-regime:
+symbol_regime:
   index_lookback_days: 520
   min_regime_bars: 260
   rs_lookback_days: 60

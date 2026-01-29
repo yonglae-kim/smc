@@ -41,7 +41,7 @@ class ScoringCfg(BaseModel):
     weights: Dict[str, float]
     top_detail: int = 50
 
-class RegimeCfg(BaseModel):
+class SymbolRegimeCfg(BaseModel):
     index_lookback_days: int = 520
     min_regime_bars: int = 260
     rs_lookback_days: int = 60
@@ -113,7 +113,7 @@ class Config(BaseModel):
     universe: UniverseCfg
     analysis: AnalysisCfg
     scoring: ScoringCfg
-    regime: RegimeCfg
+    symbol_regime: SymbolRegimeCfg
     report: ReportCfg
     trade: TradeCfg = TradeCfg()
     backtest: BacktestCfg

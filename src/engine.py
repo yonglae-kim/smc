@@ -140,8 +140,8 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         confluence = bool(overlap or near)
 
 
-    rs = relative_strength(df, int(cfg.regime.rs_lookback_days))
-    regime = compute_regime(df, cfg)
+    rs = relative_strength(df, int(cfg.symbol_regime.rs_lookback_days))
+    symbol_regime = compute_regime(df, cfg)
 
     trade_cfg = getattr(cfg, "trade", None)
     early_exit_days = int(getattr(trade_cfg, "early_exit_rsi_macd_days", 0)) if trade_cfg is not None else 0
@@ -206,7 +206,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,
         "rs": rs,
-        "regime": regime,
+        "symbol_regime": symbol_regime,
         "pivots": [{"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength} for p in piv[-40:]],
         "structure_points": struct_pts[-20:],
         "notes": [

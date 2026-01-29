@@ -14,9 +14,9 @@ from src.config import (
     BacktestCfg,
     Config,
     NetworkCfg,
-    RegimeCfg,
     ReportCfg,
     ScoringCfg,
+    SymbolRegimeCfg,
     TradeCfg,
     UniverseCfg,
 )
@@ -32,7 +32,7 @@ def make_cfg() -> Config:
         universe=UniverseCfg(),
         analysis=AnalysisCfg(),
         scoring=ScoringCfg(weights={}, top_detail=5),
-        regime=RegimeCfg(),
+        symbol_regime=SymbolRegimeCfg(),
         report=ReportCfg(title="Test Report"),
         trade=TradeCfg(
             min_score=0.0,
@@ -80,7 +80,7 @@ def sample_ctx() -> dict:
         "ob": {"lower": 95.0, "upper": 100.0, "invalidation": 92.0, "kind": "BULL", "status": "active", "quality": 2.0, "age": 2},
         "fvg": None,
         "fvg_active": False,
-        "regime": {"tag": "TAILWIND", "atr_spike": False},
+        "symbol_regime": {"tag": "TAILWIND", "atr_spike": False},
         "rs": {"tag": "RS_STRONG"},
         "structure_bias": "BULL",
         "above_ma200": False,
