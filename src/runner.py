@@ -63,6 +63,7 @@ def run(config_path: str) -> None:
     cal_dates = set()
     prog = Progress(total=len(universe), label="Analyze", every=25)
     done_count = len(done)
+    min_bars = max(80, int(cfg.universe.ohlcv_lookback_days))
     for i, meta in enumerate(universe, start=1):
         sym = meta["symbol"]
         if sym in done:
@@ -77,7 +78,7 @@ def run(config_path: str) -> None:
             except Exception:
                 df = None
 
-        if df is None or len(df) < 80:
+        if df is None or len(df) < min_bars:
             done.add(sym); done_count += 1; prog.tick(done_count, extra=f"skip={sym} reason=insufficient_data"); continue
 
         ctx = analyze_symbol(meta, df, cfg)

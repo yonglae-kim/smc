@@ -12,7 +12,7 @@ network:
   cache_ttl_sec: 0
   cache_snapshot_id: ""
 universe:
-  ohlcv_lookback_days: 120
+  ohlcv_lookback_days: 250
   liquidity_window: 20
   top_liquidity: 500
   daily_recalc_top: 800

@@ -19,7 +19,7 @@ class NetworkCfg(BaseModel):
     cache_snapshot_id: str = ""
 
 class UniverseCfg(BaseModel):
-    ohlcv_lookback_days: int = 120
+    ohlcv_lookback_days: int = 250
     liquidity_window: int = 20
     top_liquidity: int = 500
     daily_recalc_top: int = 800
