@@ -4,15 +4,29 @@ import pandas as pd
 import numpy as np
 from ..analysis.indicators import sma, rsi, atr
 
-def compute_regime(index_df: pd.DataFrame, cfg) -> Dict[str, Any]:
-    df = index_df.copy()
-    df["ma200"] = sma(df["close"], 200)
-    df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
-    df["atr14"] = atr(df, int(cfg.analysis.atr_period))
+def compute_regime(
+    index_df: pd.DataFrame,
+    cfg,
+    *,
+    ma200: float | None = None,
+    rsi14: float | None = None,
+    atr14: float | None = None,
+) -> Dict[str, Any]:
+    df = index_df
+    needs_columns = not {"ma200", "rsi14", "atr14"}.issubset(df.columns)
+    if needs_columns:
+        df = index_df.copy()
+        if "ma200" not in df.columns:
+            df["ma200"] = sma(df["close"], 200)
+        if "rsi14" not in df.columns:
+            df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
+        if "atr14" not in df.columns:
+            df["atr14"] = atr(df, int(cfg.analysis.atr_period))
+
     last = df.iloc[-1]
-    ma200 = float(last["ma200"]) if not pd.isna(last["ma200"]) else None
-    rsi14 = float(last["rsi14"]) if not pd.isna(last["rsi14"]) else None
-    atr14 = float(last["atr14"]) if not pd.isna(last["atr14"]) else None
+    ma200 = ma200 if ma200 is not None else (float(last["ma200"]) if not pd.isna(last["ma200"]) else None)
+    rsi14 = rsi14 if rsi14 is not None else (float(last["rsi14"]) if not pd.isna(last["rsi14"]) else None)
+    atr14 = atr14 if atr14 is not None else (float(last["atr14"]) if not pd.isna(last["atr14"]) else None)
 
     above_ma200 = (ma200 is not None) and (float(last["close"]) >= ma200)
     rsi_ge_50 = (rsi14 is not None) and (rsi14 >= 50)
