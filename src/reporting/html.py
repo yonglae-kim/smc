@@ -72,12 +72,6 @@ function filterTable(){
   <div class="small" style="margin-top:6px">가정: {{ tp_sl_conflict_note }}</div>
 </div>
 
-<h2 class="section-title">시장 레짐</h2>
-<div>
-  <span class="badge">KOSPI: {{ regime_kospi.tag }} · MA200={{ "상단" if regime_kospi.above_ma200 else "하단" }} · RSI50={{ "상단" if regime_kospi.rsi_ge_50 else "하단" }} · ATR spike={{ regime_kospi.atr_spike }}</span>
-  <span class="badge">KOSDAQ: {{ regime_kosdaq.tag }} · MA200={{ "상단" if regime_kosdaq.above_ma200 else "하단" }} · RSI50={{ "상단" if regime_kosdaq.rsi_ge_50 else "하단" }} · ATR spike={{ regime_kosdaq.atr_spike }}</span>
-</div>
-
 <h2 class="section-title">Top500 요약</h2>
 {% if include_js %}
 <div style="margin:8px 0 10px 0">
