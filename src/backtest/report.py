@@ -95,7 +95,7 @@ details summary{cursor:pointer;color:#333}
         <th>RR 실현</th>
         <th>MAE</th>
         <th>MFE</th>
-        <th>Structure</th>
+        <th>Symbol Regime</th>
         <th>청산 사유</th>
         <th>진입 점수</th>
         <th>점수 구성요소</th>
@@ -156,7 +156,7 @@ details summary{cursor:pointer;color:#333}
         <div>보유 {{ t.get("hold_days", 0) }}일 · RR {{ "%.2f"|format(t.rr_realized) if t.rr_realized is not none else "-" }}</div>
         <div>MAE {{ "%.2f"|format(t.get("mae", 0.0)) }} · MFE {{ "%.2f"|format(t.get("mfe", 0.0)) }}</div>
         <div>
-          <span class="tag">Structure {{ t.get("entry_structure_bias", "-") }}</span>
+          <span class="tag">Symbol Regime {{ t.get("entry_structure_bias", "-") }}</span>
           <span class="tag">SL/ATR {{ "%.2f"|format(t.stop_distance_atr) if t.stop_distance_atr is not none else "-" }}</span>
         </div>
       </div>
