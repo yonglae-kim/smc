@@ -22,7 +22,7 @@ def compute_regime(index_df: pd.DataFrame, cfg) -> Dict[str, Any]:
     atr_spike = (
         atr14 is not None
         and atr_med is not None
-        and atr14 >= float(cfg.regime.atr_spike_mult) * atr_med
+        and atr14 >= float(cfg.symbol_regime.atr_spike_mult) * atr_med
     )
 
     return {
