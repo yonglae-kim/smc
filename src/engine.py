@@ -141,7 +141,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
 
 
     rs = relative_strength(df, int(cfg.symbol_regime.rs_lookback_days))
-    symbol_regime = compute_regime(df, cfg)
+    symbol_regime = compute_regime(df, cfg, ma200=ma200, rsi14=rsi_last, atr14=atr_last)
 
     trade_cfg = getattr(cfg, "trade", None)
     early_exit_days = int(getattr(trade_cfg, "early_exit_rsi_macd_days", 0)) if trade_cfg is not None else 0
