@@ -94,8 +94,6 @@ def run(config_path: str) -> None:
         if ctx.get("fvg"): tags.append(f"FVG_{ctx['fvg']['kind']}_{ctx['fvg']['status']}")
         if ctx.get("tag_confluence_ob_fvg"): tags.append("Confluence_OB_FVG")
         tags.append(ctx.get("rs",{}).get("tag","RS_UNKNOWN"))
-        tags.append(f"REGIME_{ctx.get('regime',{}).get('tag','MIXED')}")
-        if ctx.get("regime",{}).get("atr_spike"): tags.append("Risk_ATR_Spike")
         ctx["tags"]=tags
 
         rows.append(ctx)
@@ -395,8 +393,6 @@ def run(config_path: str) -> None:
         "generated_at": now_kst_iso(),
         "universe_n": len(universe),
         "liquidity_window": cfg.universe.liquidity_window,
-        "regime_kospi": regime_kospi,
-        "regime_kosdaq": regime_kosdaq,
         "execution_guide": cfg.report.execution_guide,
         "tp_sl_conflict_note": cfg.report.tp_sl_conflict_note,
         "buy_valid_from": buy_valid_from,

@@ -300,7 +300,6 @@ class TradeRules:
             entry_breakdown=signal.score_breakdown,
             entry_stop_loss=stop_loss,
             entry_atr=atr if atr > 0 else None,
-            entry_regime_tag=(ctx.get("regime") or {}).get("tag"),
             entry_structure_bias=ctx.get("structure_bias"),
             stop_distance_atr=stop_distance_atr,
             tp1_price=tp1_price,

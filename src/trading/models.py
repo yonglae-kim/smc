@@ -68,7 +68,6 @@ class Position:
     entry_breakdown: Dict[str, Any] = field(default_factory=dict)
     entry_stop_loss: Optional[float] = None
     entry_atr: Optional[float] = None
-    entry_regime_tag: Optional[str] = None
     entry_structure_bias: Optional[str] = None
     stop_distance_atr: Optional[float] = None
     mae: float = 0.0
