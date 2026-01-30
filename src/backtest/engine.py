@@ -269,6 +269,7 @@ def run_backtest(
                 risk_per_share = entry_px - entry_plan.stop_loss
                 if not pd.notna(risk_per_share) or risk_per_share <= 0:
                     risk_per_share = entry_px * float(trade_rules.min_risk_ratio)
+                risk_per_share = max(risk_per_share, entry_px * float(trade_rules.min_risk_ratio))
                 if risk_per_share <= 0:
                     continue
                 size = max(0.0, risk_budget / risk_per_share)
