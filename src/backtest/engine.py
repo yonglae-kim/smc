@@ -276,7 +276,8 @@ def run_backtest(
                 entry_px_costed = _apply_cost(entry_px, fee_bps, slippage_bps)
 
                 position = trade_rules.build_position(signal, entry_plan, str(entry_dt.date()), entry_px_costed, size, ctx)
-                position.exit_rules["entry_reason"] = "; ".join(signal.reasons)
+                entry_reasons = trade_rules.build_entry_reasons(ctx, signal, entry_plan)
+                position.exit_rules["entry_reason"] = "; ".join(entry_reasons)
                 positions[sym] = position
                 stats["entered"] += 1
 
