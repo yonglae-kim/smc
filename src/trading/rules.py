@@ -120,12 +120,16 @@ class TradeRules:
             stop_loss = entry_px - atr * self.stop_atr_mult
         if not math.isfinite(stop_loss) or stop_loss >= entry_px:
             stop_loss = entry_px * (1 - self.min_risk_ratio)
+        min_risk_per_share = entry_px * self.min_risk_ratio
+        risk_per_share = max(1e-6, entry_px - stop_loss)
+        if risk_per_share < min_risk_per_share:
+            risk_per_share = min_risk_per_share
+            stop_loss = entry_px - risk_per_share
         stop_distance_atr = None
         if atr > 0:
             stop_distance_atr = (entry_px - stop_loss) / atr
             if math.isfinite(stop_distance_atr):
                 ctx["stop_distance_atr"] = float(stop_distance_atr)
-        risk_per_share = max(1e-6, entry_px - stop_loss)
         rr_target = float(self.rr_target)
         atr_ratio = ctx.get("atr_ratio")
         room_to_high_atr = ctx.get("room_to_high_atr")
