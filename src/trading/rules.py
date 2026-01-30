@@ -243,6 +243,10 @@ class TradeRules:
     def signal_passes(self, signal: TradeSignal) -> bool:
         return all(signal.gates.values()) if signal.gates else False
 
+    def build_entry_reasons(self, ctx: Dict[str, Any], signal: TradeSignal, entry_plan: EntryPlan) -> List[str]:
+        eval_result = {"gate_reasons": signal.gate_reasons}
+        return self._build_buy_reasons(ctx, eval_result, entry_plan, self.signal_passes(signal))
+
     def select_buy_candidates(self, signals: List[Tuple[TradeSignal, EntryPlan]]) -> List[Tuple[TradeSignal, EntryPlan]]:
         passing = [s for s in signals if self.signal_passes(s[0])]
         passing.sort(key=lambda x: (-x[0].score, x[0].symbol))
