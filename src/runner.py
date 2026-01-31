@@ -416,6 +416,9 @@ def run(config_path: str) -> None:
         os.makedirs(web_root, exist_ok=True)
         shutil.copy2(out_html, os.path.join(web_root, "report.html"))
         shutil.copy2(out_html, os.path.join(web_root, "index.html"))
+        os.chmod(web_root, 0o755)
+        os.chmod(os.path.join(web_root, "report.html"), 0o644)
+        os.chmod(os.path.join(web_root, "index.html"), 0o644)
         print(f"Report copied to: {os.path.join(web_root, 'report.html')}")
     except Exception as exc:
         print(f"[Runner] Failed to copy report to {web_root}: {exc}")
