@@ -55,7 +55,7 @@ symbol_regime:
   rs_lookback_days: 60
   atr_spike_mult: 1.8
 report:
-  title: KOSPI+KOSDAQ Daily Candidates (SMC Context)
+  title: 용픽
   max_table_rows: 500
   chart_lookback: 180
   include_sort_search_js: true
