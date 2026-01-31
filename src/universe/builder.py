@@ -87,6 +87,14 @@ class UniverseBuilder:
             # load from cache if exists, else fetch
             df = self.storage.load_ohlcv_cache(sym)
             need = int(self.cfg.ohlcv_lookback_days)
+            last_date = None
+            if df is not None and not df.empty:
+                last_date = pd.to_datetime(df["date"], errors="coerce").max()
+                if pd.isna(last_date):
+                    last_date = None
+                else:
+                    last_date = last_date.date()
+            stale = last_date is None or last_date < today
             if df is None or len(df) < need:
                 try:
                     df_new = self.provider.get_ohlcv(sym, count=max(need, 260))
@@ -96,6 +104,21 @@ class UniverseBuilder:
                 except Exception:
                     # keep as missing
                     df = None
+            elif stale:
+                try:
+                    df_new = self.provider.get_ohlcv(sym, count=10)
+                    if df_new is not None and len(df_new) >= 1:
+                        df = pd.concat([df, df_new], ignore_index=True)
+                        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                        df = (
+                            df.dropna(subset=["date"])
+                            .drop_duplicates(subset=["date"])
+                            .sort_values("date")
+                            .reset_index(drop=True)
+                        )
+                        self.storage.save_ohlcv_cache(sym, df)
+                except Exception:
+                    pass
             liq = self._liquidity_median(df, int(self.cfg.liquidity_window)) if df is not None else 0.0
             results[sym] = {"liquidity": liq, "name": row.get("name",""), "market": row.get("market","")}
             done.add(sym)
