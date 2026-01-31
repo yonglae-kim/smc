@@ -73,6 +73,14 @@ def run(config_path: str) -> None:
         if sym in done:
             continue
         df = storage.load_ohlcv_cache(sym)
+        last_date = None
+        if df is not None and not df.empty:
+            last_date = pd.to_datetime(df["date"], errors="coerce").max()
+            if pd.isna(last_date):
+                last_date = None
+            else:
+                last_date = last_date.date()
+        stale = last_date is None or last_date < today_kst()
         if df is None or len(df) < cfg.universe.ohlcv_lookback_days:
             try:
                 df_new = provider.get_ohlcv(sym, count=max(cfg.universe.ohlcv_lookback_days, 300))
@@ -81,6 +89,21 @@ def run(config_path: str) -> None:
                     df = df_new
             except Exception:
                 df = None
+        elif stale:
+            try:
+                df_new = provider.get_ohlcv(sym, count=10)
+                if df_new is not None and len(df_new) >= 1:
+                    df = pd.concat([df, df_new], ignore_index=True)
+                    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                    df = (
+                        df.dropna(subset=["date"])
+                        .drop_duplicates(subset=["date"])
+                        .sort_values("date")
+                        .reset_index(drop=True)
+                    )
+                    storage.save_ohlcv_cache(sym, df)
+            except Exception:
+                pass
 
         if df is None or len(df) < min_bars:
             done.add(sym); done_count += 1; prog.tick(done_count, extra=f"skip={sym} reason=insufficient_data"); continue
