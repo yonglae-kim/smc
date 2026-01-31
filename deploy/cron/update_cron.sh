@@ -17,7 +17,7 @@ fi
 
 mkdir -p "${LOG_DIR}"
 
-CRON_ENTRY="0 19 * * * ${PYTHON_BIN} ${PROJECT_ROOT}/main.py --config ${CONFIG_FILE} >> ${LOG_FILE} 2>&1"
+CRON_ENTRY="0 19 * * * ${PYTHON_BIN} ${PROJECT_ROOT}/main.py --config ${CONFIG_FILE} > ${LOG_FILE} 2>&1"
 
 CURRENT_CRON="$(crontab -l 2>/dev/null || true)"
 
