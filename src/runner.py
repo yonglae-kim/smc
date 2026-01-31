@@ -59,6 +59,9 @@ def run(config_path: str) -> None:
     # resume state for analysis
     st = storage.load_json(f"state/analysis_progress_{ymd}.json", default={"done": []})
     done = set(st.get("done", []))
+    if done and len(done) >= len(universe):
+        print("[Runner] Analysis progress is complete; resetting progress for re-run.", flush=True)
+        done = set()
     rows=[]
     ctx_map={}
     cal_dates = set()
@@ -105,7 +108,7 @@ def run(config_path: str) -> None:
         if len(done) % 60 == 0:
             storage.save_json(f"state/analysis_progress_{ymd}.json", {"done": sorted(list(done))})
 
-    storage.save_json(f"state/analysis_progress_{ymd}.json", {"done": sorted(list(done))})
+    storage.save_json(f"state/analysis_progress_{ymd}.json", {"done": []})
 
     cal = sorted(cal_dates)
 
