@@ -9,10 +9,13 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager, rcParams
 from matplotlib.patches import Rectangle
 
+_KOREAN_FONT_CONFIGURED = False
+
 def _configure_korean_font() -> None:
-    if rcParams.get("_smc_korean_font_configured"):
+    global _KOREAN_FONT_CONFIGURED
+    if _KOREAN_FONT_CONFIGURED:
         return
-    rcParams["_smc_korean_font_configured"] = True
+    _KOREAN_FONT_CONFIGURED = True
 
     candidates = (
         "Noto Sans CJK KR",
