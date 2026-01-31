@@ -298,6 +298,7 @@ def run(config_path: str) -> None:
                     "symbol": pos.symbol,
                     "name": pos.name,
                     "market": pos.market,
+                    "last_ohlc": bar,
                     "close": last_price,
                     "position": pos.to_dict(),
                     "pnl_pct": pnl_pct,
@@ -350,9 +351,21 @@ def run(config_path: str) -> None:
     for row in buy_candidates[:detail_n]:
         c = dict(row["ctx"])
         c["signal"] = row["signal"].to_dict()
-        c["entry_plan"] = row["entry_plan"].to_dict()
         df = storage.load_ohlcv_cache(c["symbol"])
         df = df.sort_values("date").reset_index(drop=True)
+        last_ohlc = None
+        if not df.empty:
+            last_row = df.iloc[-1]
+            last_ohlc = {
+                "open": float(last_row["open"]),
+                "high": float(last_row["high"]),
+                "low": float(last_row["low"]),
+                "close": float(last_row["close"]),
+            }
+            c["close"] = last_ohlc["close"]
+        c["last_ohlc"] = last_ohlc
+        entry_plan_latest = trade_rules.build_entry_plan(c, entry_price=float(c.get("close", 0.0)))
+        c["entry_plan"] = entry_plan_latest.to_dict()
         from .analysis.indicators import sma, rsi, atr
         df["ma20"] = sma(df["close"], int(cfg.analysis.ma_fast))
         df["ma200"] = sma(df["close"], int(cfg.analysis.ma_slow))
