@@ -83,6 +83,8 @@ function filterTable(){
 
 <h2 class="section-title">매수 후보 (다음 세션)</h2>
 <div class="small">시그널은 종가 기준 산출, {{ buy_valid_from }}부터 유효.</div>
+
+<h3 class="section-title">즉시 진입 후보</h3>
 <div class="table-wrap">
   <table>
     <thead>
@@ -91,6 +93,7 @@ function filterTable(){
         <th>점수</th>
         <th>심볼</th>
         <th>종목명</th>
+        <th>진입 타입</th>
         <th>진입가</th>
         <th>손절</th>
         <th>목표</th>
@@ -99,12 +102,53 @@ function filterTable(){
       </tr>
     </thead>
     <tbody>
-    {% for b in buy_rows %}
+    {% for b in immediate_buy_rows %}
       <tr>
         <td>{{ b.rank }}</td>
         <td>{{ "%.2f"|format(b.signal.score) }}</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
+        <td>{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
+        <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
+        <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
+        <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
+        <td>{{ "%.2f"|format(b.entry_plan.rr) }}</td>
+        <td>
+          {% for g in b.gates %}
+            <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
+          {% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h3 class="section-title">되돌림 대기 후보</h3>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>순위</th>
+        <th>점수</th>
+        <th>심볼</th>
+        <th>종목명</th>
+        <th>진입 타입</th>
+        <th>진입가</th>
+        <th>손절</th>
+        <th>목표</th>
+        <th>RR</th>
+        <th>게이트</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for b in pullback_buy_rows %}
+      <tr>
+        <td>{{ b.rank }}</td>
+        <td>{{ "%.2f"|format(b.signal.score) }}</td>
+        <td>{{ b.symbol }}</td>
+        <td>{{ b.name }}</td>
+        <td>{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
