@@ -188,6 +188,9 @@ function filterTable(){
     <div>
       <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
       <div class="small">점수 {{ "%.2f"|format(c.signal.score) }} · 종가 {{ "%.0f"|format(c.close) }} · MA20 {{ "%.0f"|format(c.ma20 or 0) }} · MA200 {{ "%.0f"|format(c.ma200 or 0) }} · Slope20 {{ "%.2f"|format((c.ma_slope_pct or 0) * 100) }}% · ATR {{ "%.1f"|format(c.atr14 or 0) }} · RS {{ c.rs.tag }}</div>
+      {% if c.last_ohlc %}
+      <div class="small">마지막 OHLC · O {{ "%.0f"|format(c.last_ohlc.open) }} · H {{ "%.0f"|format(c.last_ohlc.high) }} · L {{ "%.0f"|format(c.last_ohlc.low) }} · C {{ "%.0f"|format(c.last_ohlc.close) }}</div>
+      {% endif %}
       <div style="margin-top:6px">
         {% for t in c.tags %}
           <span class="badge">{{ t }}</span>
@@ -231,6 +234,9 @@ function filterTable(){
     <div>
       <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
       <div class="small">진입 {{ "%.0f"|format(c.position.entry_price) }} · 현재 {{ "%.0f"|format(c.close) }} · P/L {{ "%.2f"|format(c.pnl_pct) }}%</div>
+      {% if c.last_ohlc %}
+      <div class="small">마지막 OHLC · O {{ "%.0f"|format(c.last_ohlc.open) }} · H {{ "%.0f"|format(c.last_ohlc.high) }} · L {{ "%.0f"|format(c.last_ohlc.low) }} · C {{ "%.0f"|format(c.last_ohlc.close) }}</div>
+      {% endif %}
       <div style="margin-top:6px">
         {% for t in c.tags %}
           <span class="badge">{{ t }}</span>
