@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os, math
+import shutil
 from typing import Dict, Any, List
 import pandas as pd
 
@@ -407,3 +408,10 @@ def run(config_path: str) -> None:
     out_html = os.path.join(out_dir, "report.html")
     render_report(out_html, payload, include_js=bool(cfg.report.include_sort_search_js))
     print(f"Report written: {out_html}")
+    web_root = "/var/www/html/jusik"
+    try:
+        os.makedirs(web_root, exist_ok=True)
+        shutil.copy2(out_html, os.path.join(web_root, "report.html"))
+        print(f"Report copied to: {os.path.join(web_root, 'report.html')}")
+    except Exception as exc:
+        print(f"[Runner] Failed to copy report to {web_root}: {exc}")
