@@ -16,7 +16,7 @@ h1{margin:0 0 8px 0}
 .card{border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin:14px 0}
 .grid{display:grid;grid-template-columns:1fr;gap:10px}
 @media(min-width:1000px){.grid{grid-template-columns:1.3fr 1fr}}
-table{border-collapse:collapse;width:100%}
+table{border-collapse:collapse;width:100%;min-width:720px}
 th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;font-size:12px;vertical-align:top;line-height:1.4}
 th{position:sticky;top:0;background:#fafafa}
 tr:hover{background:#fcfcfc}
@@ -26,6 +26,15 @@ pre{white-space:pre-wrap;margin:0;font-size:12px;color:#333}
 .kpi .card{margin:0;padding:10px 12px}
 tbody tr:nth-child(even){background:#fcfcff}
 .section-title{margin-top:18px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:720px){
+  body{margin:12px}
+  h1{font-size:22px}
+  input{width:100%}
+  table{min-width:640px}
+  th,td{font-size:11px;padding:6px 5px}
+  .card{padding:12px}
+}
 </style>
 {% if include_js %}
 <script>
@@ -72,142 +81,105 @@ function filterTable(){
   <div class="small" style="margin-top:6px">가정: {{ tp_sl_conflict_note }}</div>
 </div>
 
-<h2 class="section-title">Top500 요약</h2>
-{% if include_js %}
-<div style="margin:8px 0 10px 0">
-  <input id="q" onkeyup="filterTable()" placeholder="심볼/이름/태그 검색..."/>
-</div>
-{% endif %}
-<table id="uTable">
-  <thead>
-    <tr>
-      <th onclick="sortTable(0)">순위</th>
-      <th onclick="sortTable(1)">점수</th>
-      <th>심볼</th>
-      <th>종목명</th>
-      <th>시장</th>
-      <th>태그</th>
-      <th onclick="sortTable(6)">종가</th>
-      <th onclick="sortTable(7)">MA20</th>
-      <th onclick="sortTable(8)">MA200</th>
-      <th onclick="sortTable(9)">Slope20%</th>
-      <th onclick="sortTable(10)">RSI</th>
-      <th>레벨</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for r in table_rows %}
-    <tr>
-      <td data-sort="{{ r.rank }}">{{ r.rank }}</td>
-      <td data-sort="{{ r.score }}">{{ "%.1f"|format(r.score) }}</td>
-      <td>{{ r.symbol }}</td>
-      <td>{{ r.name }}</td>
-      <td>{{ r.market }}</td>
-      <td>{{ r.tags|join(", ") }}</td>
-      <td data-sort="{{ r.close }}">{{ "%.0f"|format(r.close) }}</td>
-      <td data-sort="{{ r.ma20 or 0 }}">{{ "%.0f"|format(r.ma20) if r.ma20 else "" }}</td>
-      <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 else "" }}</td>
-      <td data-sort="{{ r.ma_slope_pct or 0 }}">{{ "%.2f"|format(r.ma_slope_pct * 100) if r.ma_slope_pct is not none else "" }}</td>
-      <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 else "" }}</td>
-      <td>{{ r.levels }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-
 <h2 class="section-title">매수 후보 (다음 세션)</h2>
 <div class="small">시그널은 종가 기준 산출, {{ buy_valid_from }}부터 유효.</div>
-<table>
-  <thead>
-    <tr>
-      <th>순위</th>
-      <th>점수</th>
-      <th>심볼</th>
-      <th>종목명</th>
-      <th>진입가</th>
-      <th>손절</th>
-      <th>목표</th>
-      <th>RR</th>
-      <th>게이트</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for b in buy_rows %}
-    <tr>
-      <td>{{ b.rank }}</td>
-      <td>{{ "%.2f"|format(b.signal.score) }}</td>
-      <td>{{ b.symbol }}</td>
-      <td>{{ b.name }}</td>
-      <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
-      <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
-      <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
-      <td>{{ "%.2f"|format(b.entry_plan.rr) }}</td>
-      <td>
-        {% for g in b.gates %}
-          <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
-        {% endfor %}
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>순위</th>
+        <th>점수</th>
+        <th>심볼</th>
+        <th>종목명</th>
+        <th>진입가</th>
+        <th>손절</th>
+        <th>목표</th>
+        <th>RR</th>
+        <th>게이트</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for b in buy_rows %}
+      <tr>
+        <td>{{ b.rank }}</td>
+        <td>{{ "%.2f"|format(b.signal.score) }}</td>
+        <td>{{ b.symbol }}</td>
+        <td>{{ b.name }}</td>
+        <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
+        <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
+        <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
+        <td>{{ "%.2f"|format(b.entry_plan.rr) }}</td>
+        <td>
+          {% for g in b.gates %}
+            <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
+          {% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <h2 class="section-title">매도 후보 (리스크 관리)</h2>
 <div class="small">보유 포지션 기준으로만 산출.</div>
-<table>
-  <thead>
-    <tr>
-      <th>심볼</th>
-      <th>종목명</th>
-      <th>진입가</th>
-      <th>현재가</th>
-      <th>P/L</th>
-      <th>청산 사유</th>
-      <th>다음 액션</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for s in sell_rows %}
-    <tr>
-      <td>{{ s.symbol }}</td>
-      <td>{{ s.name }}</td>
-      <td>{{ "%.0f"|format(s.entry_price) }}</td>
-      <td>{{ "%.0f"|format(s.last_price) }}</td>
-      <td>{{ "%.2f"|format(s.pnl_pct) }}%</td>
-      <td>{{ s.exit_reason }}</td>
-      <td>{{ s.next_action }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>심볼</th>
+        <th>종목명</th>
+        <th>진입가</th>
+        <th>현재가</th>
+        <th>P/L</th>
+        <th>청산 사유</th>
+        <th>다음 액션</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in sell_rows %}
+      <tr>
+        <td>{{ s.symbol }}</td>
+        <td>{{ s.name }}</td>
+        <td>{{ "%.0f"|format(s.entry_price) }}</td>
+        <td>{{ "%.0f"|format(s.last_price) }}</td>
+        <td>{{ "%.2f"|format(s.pnl_pct) }}%</td>
+        <td>{{ s.exit_reason }}</td>
+        <td>{{ s.next_action }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <h2 class="section-title">포트폴리오 상태</h2>
-<table>
-  <thead>
-    <tr>
-      <th>심볼</th>
-      <th>종목명</th>
-      <th>진입가</th>
-      <th>현재가</th>
-      <th>P/L</th>
-      <th>잔여 리스크</th>
-      <th>다음 액션</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for p in portfolio_rows %}
-    <tr>
-      <td>{{ p.symbol }}</td>
-      <td>{{ p.name }}</td>
-      <td>{{ "%.0f"|format(p.entry_price) }}</td>
-      <td>{{ "%.0f"|format(p.last_price) }}</td>
-      <td>{{ "%.2f"|format(p.pnl_pct) }}%</td>
-      <td>{{ "%.2f"|format(p.risk_pct) }}%</td>
-      <td>{{ p.next_action }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>심볼</th>
+        <th>종목명</th>
+        <th>진입가</th>
+        <th>현재가</th>
+        <th>P/L</th>
+        <th>잔여 리스크</th>
+        <th>다음 액션</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in portfolio_rows %}
+      <tr>
+        <td>{{ p.symbol }}</td>
+        <td>{{ p.name }}</td>
+        <td>{{ "%.0f"|format(p.entry_price) }}</td>
+        <td>{{ "%.0f"|format(p.last_price) }}</td>
+        <td>{{ "%.2f"|format(p.pnl_pct) }}%</td>
+        <td>{{ "%.2f"|format(p.risk_pct) }}%</td>
+        <td>{{ p.next_action }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <h2 class="section-title">매수 상세 카드</h2>
 {% for c in buy_details %}
@@ -284,6 +256,51 @@ function filterTable(){
   </div>
 </div>
 {% endfor %}
+
+<h2 class="section-title">Top500 요약</h2>
+{% if include_js %}
+<div style="margin:8px 0 10px 0">
+  <input id="q" onkeyup="filterTable()" placeholder="심볼/이름/태그 검색..."/>
+</div>
+{% endif %}
+<div class="table-wrap">
+  <table id="uTable">
+    <thead>
+      <tr>
+        <th onclick="sortTable(0)">순위</th>
+        <th onclick="sortTable(1)">점수</th>
+        <th>심볼</th>
+        <th>종목명</th>
+        <th>시장</th>
+        <th>태그</th>
+        <th onclick="sortTable(6)">종가</th>
+        <th onclick="sortTable(7)">MA20</th>
+        <th onclick="sortTable(8)">MA200</th>
+        <th onclick="sortTable(9)">Slope20%</th>
+        <th onclick="sortTable(10)">RSI</th>
+        <th>레벨</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in table_rows %}
+      <tr>
+        <td data-sort="{{ r.rank }}">{{ r.rank }}</td>
+        <td data-sort="{{ r.score }}">{{ "%.1f"|format(r.score) }}</td>
+        <td>{{ r.symbol }}</td>
+        <td>{{ r.name }}</td>
+        <td>{{ r.market }}</td>
+        <td>{{ r.tags|join(", ") }}</td>
+        <td data-sort="{{ r.close }}">{{ "%.0f"|format(r.close) }}</td>
+        <td data-sort="{{ r.ma20 or 0 }}">{{ "%.0f"|format(r.ma20) if r.ma20 else "" }}</td>
+        <td data-sort="{{ r.ma200 or 0 }}">{{ "%.0f"|format(r.ma200) if r.ma200 else "" }}</td>
+        <td data-sort="{{ r.ma_slope_pct or 0 }}">{{ "%.2f"|format(r.ma_slope_pct * 100) if r.ma_slope_pct is not none else "" }}</td>
+        <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 else "" }}</td>
+        <td>{{ r.levels }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 </body>
 </html>""")
 
