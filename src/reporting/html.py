@@ -9,31 +9,95 @@ HTML_TMPL = Template(r"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>{{ title }}</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:20px;color:#111}
-h1{margin:0 0 8px 0}
-.small{color:#666;font-size:12px}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-right:6px;background:#eee}
-.card{border:1px solid #e5e5e5;border-radius:12px;padding:14px;margin:14px 0}
-.grid{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:1000px){.grid{grid-template-columns:1.3fr 1fr}}
-table{border-collapse:collapse;width:100%;min-width:720px}
-th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;font-size:12px;vertical-align:top;line-height:1.4}
-th{position:sticky;top:0;background:#fafafa}
-tr:hover{background:#fcfcfc}
-input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;width:340px}
-pre{white-space:pre-wrap;margin:0;font-size:12px;color:#333}
-.kpi{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
-.kpi .card{margin:0;padding:10px 12px}
-tbody tr:nth-child(even){background:#fcfcff}
-.section-title{margin-top:18px}
-.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+body{
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  margin:0;
+  color:#0f172a;
+  background:#f5f7fb;
+}
+.container{max-width:1200px;margin:0 auto;padding:28px 20px 60px}
+.header{
+  background:linear-gradient(135deg,#0f172a,#1d4ed8);
+  color:#fff;
+  border-radius:18px;
+  padding:22px 24px;
+  box-shadow:0 14px 30px rgba(15,23,42,0.2);
+}
+h1{margin:0;font-size:28px;letter-spacing:-0.4px}
+.subtitle{margin-top:8px;font-size:13px;color:rgba(255,255,255,0.8)}
+.small{color:#64748b;font-size:12px}
+.badge{
+  display:inline-block;
+  padding:2px 10px;
+  border-radius:999px;
+  font-size:12px;
+  margin:0 6px 6px 0;
+  background:#e2e8f0;
+  color:#334155;
+}
+.card{
+  border:1px solid #e2e8f0;
+  border-radius:16px;
+  padding:16px;
+  margin:16px 0;
+  background:#fff;
+  box-shadow:0 8px 18px rgba(15,23,42,0.06);
+}
+.grid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:1000px){.grid{grid-template-columns:1.25fr 1fr}}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:720px}
+th,td{
+  border-bottom:1px solid #e2e8f0;
+  padding:10px 8px;
+  text-align:left;
+  font-size:12px;
+  vertical-align:top;
+  line-height:1.4;
+}
+th{
+  position:sticky;
+  top:0;
+  background:#f8fafc;
+  color:#1e293b;
+  font-weight:600;
+}
+tr:hover{background:#f1f5f9}
+input{
+  padding:10px 12px;
+  border:1px solid #cbd5f5;
+  border-radius:10px;
+  width:360px;
+  background:#fff;
+}
+pre{white-space:pre-wrap;margin:0;font-size:12px;color:#1f2937}
+.kpi{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0 0}
+.kpi .card{margin:0;padding:12px 14px}
+tbody tr:nth-child(even){background:#f8fafc}
+.section-title{margin-top:26px;font-size:18px;color:#0f172a}
+.table-wrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  background:#fff;
+  border-radius:14px;
+  border:1px solid #e2e8f0;
+  padding:6px;
+  box-shadow:0 6px 16px rgba(15,23,42,0.04);
+}
+.meta-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  margin-top:8px;
+  color:#e2e8f0;
+  font-size:12px;
+}
 @media(max-width:720px){
-  body{margin:12px}
+  .container{padding:18px 14px 40px}
   h1{font-size:22px}
   input{width:100%}
   table{min-width:640px}
-  th,td{font-size:11px;padding:6px 5px}
-  .card{padding:12px}
+  th,td{font-size:11px;padding:8px 6px}
+  .card{padding:14px}
 }
 </style>
 {% if include_js %}
@@ -73,13 +137,22 @@ function filterTable(){
 {% endif %}
 </head>
 <body>
-<h1>{{ title }}</h1>
-<div class="small">생성 시각 {{ generated_at }} (KST) · 유니버스: 유동성 상위 {{ universe_n }}개 (중위값, {{ liquidity_window }}일)</div>
-<div class="card">
-  <div style="font-weight:700">실행 가이드</div>
-  <div class="small">{{ execution_guide }}</div>
-  <div class="small" style="margin-top:6px">가정: {{ tp_sl_conflict_note }}</div>
-</div>
+<div class="container">
+  <div class="header">
+    <h1>{{ title }}</h1>
+    <div class="subtitle">오늘의 SMC 시그널 요약 리포트</div>
+    <div class="meta-row">
+      <span>생성 시각 {{ generated_at }} (KST)</span>
+      <span>유니버스: 유동성 상위 {{ universe_n }}개</span>
+      <span>중위값 기준 {{ liquidity_window }}일</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <div style="font-weight:700;font-size:14px">실행 가이드</div>
+    <div class="small" style="margin-top:6px">{{ execution_guide }}</div>
+    <div class="small" style="margin-top:8px">가정: {{ tp_sl_conflict_note }}</div>
+  </div>
 
 <h2 class="section-title">매수 후보 (다음 세션)</h2>
 <div class="small">시그널은 종가 기준 산출, {{ buy_valid_from }}부터 유효.</div>
@@ -250,7 +323,7 @@ function filterTable(){
 
   <div class="grid" style="margin-top:10px">
     <div>
-      <img style="width:100%;border-radius:10px;border:1px solid #eee" src="data:image/png;base64,{{ c.chart_b64 }}"/>
+      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="data:image/png;base64,{{ c.chart_b64 }}"/>
     </div>
     <div>
       <div style="font-weight:700;margin-bottom:6px">주요 레벨 / 컨텍스트</div>
@@ -295,7 +368,7 @@ function filterTable(){
 
   <div class="grid" style="margin-top:10px">
     <div>
-      <img style="width:100%;border-radius:10px;border:1px solid #eee" src="data:image/png;base64,{{ c.chart_b64 }}"/>
+      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="data:image/png;base64,{{ c.chart_b64 }}"/>
     </div>
     <div>
       <div style="font-weight:700;margin-bottom:6px">청산 사유</div>
@@ -350,6 +423,7 @@ function filterTable(){
     {% endfor %}
     </tbody>
   </table>
+</div>
 </div>
 </body>
 </html>""")
