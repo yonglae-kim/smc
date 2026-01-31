@@ -17,6 +17,10 @@ Run at 19:00 KST every day:
 ```cron
 0 19 * * * /path/to/.venv/bin/python /path/to/kquant_smc_reporter/main.py --config /path/to/kquant_smc_reporter/config.yaml >> /path/to/logs/kquant.log 2>&1
 ```
+Or use the helper script to register a single cron entry (skips if already present):
+```bash
+deploy/cron/update_cron.sh
+```
 
 ### systemd timer (recommended)
 See `deploy/systemd/`.
