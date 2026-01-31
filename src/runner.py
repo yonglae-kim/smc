@@ -185,6 +185,8 @@ def run(config_path: str) -> None:
     signal_map = {r["signal"].symbol: r for r in signal_rows}
     selected = trade_rules.select_buy_candidates([(r["signal"], r["entry_plan"]) for r in signal_rows])
     buy_candidates = [signal_map[s[0].symbol] for s in selected]
+    immediate_buys = [row for row in buy_candidates if row["entry_plan"].entry_type == "next_open"]
+    pullback_buys = [row for row in buy_candidates if row["entry_plan"].entry_type != "next_open"]
     buy_valid_from = trade_rules.next_trading_day(cal, ymd) if cal else ymd
 
     state = storage.load_json("state/positions_live.json", default={"positions": [], "pending_entries": [], "pending_exits": [], "last_date": None})
@@ -416,18 +418,23 @@ def run(config_path: str) -> None:
         c["reason_text"] = "\n".join(all_reasons) if all_reasons else "(no reasons)"
         buy_details.append(c)
 
-    buy_rows = []
-    for rank, row in enumerate(buy_candidates, start=1):
-        buy_rows.append(
-            {
-                "rank": rank,
-                "symbol": row["signal"].symbol,
-                "name": row["ctx"].get("name", ""),
-                "signal": row["signal"],
-                "entry_plan": row["entry_plan"],
-                "gates": [{"key": k, "pass": v} for k, v in row["signal"].gates.items()],
-            }
-        )
+    def build_buy_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        rows = []
+        for rank, row in enumerate(candidates, start=1):
+            rows.append(
+                {
+                    "rank": rank,
+                    "symbol": row["signal"].symbol,
+                    "name": row["ctx"].get("name", ""),
+                    "signal": row["signal"],
+                    "entry_plan": row["entry_plan"],
+                    "gates": [{"key": k, "pass": v} for k, v in row["signal"].gates.items()],
+                }
+            )
+        return rows
+
+    immediate_buy_rows = build_buy_rows(immediate_buys)
+    pullback_buy_rows = build_buy_rows(pullback_buys)
 
     payload = {
         "title": cfg.report.title,
@@ -438,7 +445,8 @@ def run(config_path: str) -> None:
         "tp_sl_conflict_note": cfg.report.tp_sl_conflict_note,
         "buy_valid_from": buy_valid_from,
         "table_rows": table_rows,
-        "buy_rows": buy_rows,
+        "immediate_buy_rows": immediate_buy_rows,
+        "pullback_buy_rows": pullback_buy_rows,
         "sell_rows": sell_rows,
         "portfolio_rows": portfolio_rows,
         "buy_details": buy_details,
