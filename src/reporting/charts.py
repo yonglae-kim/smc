@@ -1,9 +1,45 @@
 from __future__ import annotations
-import io, base64
+import base64
+import io
+import warnings
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import font_manager, rcParams
 from matplotlib.patches import Rectangle
+
+def _configure_korean_font() -> None:
+    if rcParams.get("_smc_korean_font_configured"):
+        return
+    rcParams["_smc_korean_font_configured"] = True
+
+    candidates = (
+        "Noto Sans CJK KR",
+        "NotoSansCJKkr",
+        "Noto Sans KR",
+        "NanumGothic",
+        "Malgun Gothic",
+        "AppleGothic",
+    )
+    font_files = font_manager.findSystemFonts(fontext="ttf") + font_manager.findSystemFonts(fontext="otf")
+    selected_name = None
+    for path in font_files:
+        lower = path.lower()
+        if any(c.replace(" ", "").lower() in lower.replace("-", "").replace("_", "") for c in candidates):
+            try:
+                font_manager.fontManager.addfont(path)
+                selected_name = font_manager.FontProperties(fname=path).get_name()
+                break
+            except Exception:
+                continue
+
+    if selected_name:
+        rcParams["font.family"] = selected_name
+    else:
+        rcParams.setdefault("font.family", "sans-serif")
+        rcParams["font.sans-serif"] = list(candidates) + ["DejaVu Sans", "Arial", "sans-serif"]
+        warnings.filterwarnings("ignore", message="Glyph .* missing from current font.")
 
 def _candles(ax, df: pd.DataFrame):
     # Basic candlestick without mplfinance.
@@ -18,6 +54,7 @@ def _candles(ax, df: pd.DataFrame):
 
 def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180) -> str:
     """Return base64 PNG for single symbol. Price + RSI subchart, zones overlay."""
+    _configure_korean_font()
     full = df.reset_index(drop=True).copy()
     d = full.tail(lookback).reset_index(drop=True).copy()
     if len(d) < 30:
