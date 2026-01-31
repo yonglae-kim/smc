@@ -23,14 +23,20 @@ class HttpCache:
         os.makedirs(self.base_dir, exist_ok=True)
         return os.path.join(self.base_dir, f"{key}.json")
 
-    def load(self, url: str, params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def load(
+        self,
+        url: str,
+        params: Optional[Dict[str, Any]],
+        ttl_override: Optional[float] = None,
+    ) -> Optional[Dict[str, Any]]:
         key = self._key(url, params)
         fp = self._path(key)
         if not os.path.exists(fp):
             return None
-        if self.ttl_sec and self.ttl_sec > 0:
+        ttl_sec = self.ttl_sec if ttl_override is None else ttl_override
+        if ttl_sec and ttl_sec > 0:
             age = time.time() - os.path.getmtime(fp)
-            if age > self.ttl_sec:
+            if age > ttl_sec:
                 return None
         with open(fp, "r", encoding="utf-8") as f:
             return json.load(f)

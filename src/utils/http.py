@@ -42,8 +42,9 @@ class HttpClient:
         headers = headers or {}
         headers.setdefault("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122 Safari/537.36")
         last_err = None
+        ohlcv_ttl_override = 60 * 60 if "fchart.stock.naver.com/sise.nhn" in url else None
         if self.cache and self.cache.mode in ("use", "snapshot"):
-            cached = self.cache.load(url, params)
+            cached = self.cache.load(url, params, ttl_override=ohlcv_ttl_override)
             if cached:
                 return CachedResponse(cached.get("text", ""), cached.get("encoding"), url=url)
         for i in range(self.max_retries+1):
