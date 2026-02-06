@@ -263,6 +263,8 @@ def run_backtest(
                         continue
                     entry_px = float(d["close"].iloc[0])
                 entry_plan = trade_rules.build_entry_plan(ctx, entry_px)
+                if entry_px > entry_plan.entry_price:
+                    continue
                 if entry_px <= 0 or not pd.notna(entry_px):
                     continue
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
