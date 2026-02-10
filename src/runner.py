@@ -227,12 +227,14 @@ def run(config_path: str) -> None:
             if row.empty:
                 remaining_entries.append(pe)
                 continue
-            entry_px = float(row["open"].iloc[0])
+            open_px = float(row["open"].iloc[0])
+            low_px = float(row["low"].iloc[0])
             signal = TradeSignal(**pe["signal"])
             entry_plan = EntryPlan(**pe["entry_plan"])
-            if entry_px > entry_plan.entry_price:
+            if low_px > entry_plan.entry_price:
                 remaining_entries.append(pe)
                 continue
+            entry_px = open_px if open_px <= entry_plan.entry_price else entry_plan.entry_price
             position = trade_rules.build_position(signal, entry_plan, ymd, entry_px, 1.0, ctx)
             positions.append(position)
         else:
