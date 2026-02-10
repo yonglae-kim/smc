@@ -256,15 +256,19 @@ def run_backtest(
                     if df_after.empty:
                         continue
                     entry_dt = df_after["date"].iloc[0]
-                    entry_px = float(df_after["open"].iloc[0])
+                    open_px = float(df_after["open"].iloc[0])
+                    low_px = float(df_after["low"].iloc[0])
                 else:
                     d = df_full[df_full["date"] == dt]
                     if d.empty:
                         continue
-                    entry_px = float(d["close"].iloc[0])
-                entry_plan = trade_rules.build_entry_plan(ctx, entry_px)
-                if entry_px > entry_plan.entry_price:
+                    open_px = float(d["open"].iloc[0])
+                    low_px = float(d["low"].iloc[0])
+                plan_anchor_px = open_px if fill_price == "next_open" else float(d["close"].iloc[0])
+                entry_plan = trade_rules.build_entry_plan(ctx, plan_anchor_px)
+                if low_px > entry_plan.entry_price:
                     continue
+                entry_px = open_px if open_px <= entry_plan.entry_price else entry_plan.entry_price
                 if entry_px <= 0 or not pd.notna(entry_px):
                     continue
                 risk_budget = equity * float(cfg.backtest.risk_per_trade)
