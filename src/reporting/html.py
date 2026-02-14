@@ -119,6 +119,34 @@ tbody tr:nth-child(even){background:#f8fafc}
   grid-template-columns:repeat(3,minmax(0,1fr));
   gap:12px;
 }
+.story-strip{
+  margin-top:16px;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+.story-card{
+  background:#ffffff;
+  border:1px solid #dbe4f4;
+  border-radius:14px;
+  padding:14px;
+  box-shadow:0 8px 18px rgba(15,23,42,0.06);
+}
+.story-title{font-size:12px;color:#64748b;font-weight:700}
+.story-metric{margin-top:8px;font-size:24px;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:8px}
+.story-description{margin-top:8px;font-size:13px;color:#334155;line-height:1.45}
+.story-note{margin-top:8px}
+.story-note summary{cursor:pointer;font-size:12px;color:#1d4ed8;font-weight:600}
+.story-note div{margin-top:6px;font-size:12px;color:#475569;line-height:1.4}
+.motion-ready .story-card{
+  opacity:0;
+  transform:translateY(10px);
+  transition:opacity .45s ease, transform .45s ease;
+}
+.motion-ready .story-card.is-visible{
+  opacity:1;
+  transform:translateY(0);
+}
 .decision-block{
   background:#fff;
   border:1px solid #dbe4f4;
@@ -181,9 +209,19 @@ tbody tr:nth-child(even){background:#f8fafc}
     scroll-snap-type:x mandatory;
     -webkit-overflow-scrolling:touch;
   }
+  .story-strip{grid-template-columns:1fr}
   .decision-block{min-width:82%;scroll-snap-align:start}
   .toolbar-row{align-items:stretch}
   .desktop-sort{pointer-events:none;color:#64748b}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .motion-ready .story-card,
+  .motion-ready .story-card.is-visible{
+    opacity:1;
+    transform:none;
+    transition:none;
+  }
 }
 
 </style>
@@ -273,7 +311,25 @@ function openRowDetail(row){
   row.dataset.expanded=isOpen ? "0" : "1";
   detail.style.display=isOpen ? "none" : "";
 }
-document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQuickFilter("all"); });
+function initStoryCards(){
+  const cards=document.querySelectorAll(".story-card");
+  if(!cards.length) return;
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    cards.forEach((card)=>card.classList.add("is-visible"));
+    return;
+  }
+  document.body.classList.add("motion-ready");
+  const observer=new IntersectionObserver((entries)=>{
+    entries.forEach((entry)=>{
+      if(entry.isIntersecting){
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {threshold:0.18, rootMargin:"0px 0px -8% 0px"});
+  cards.forEach((card)=>observer.observe(card));
+}
+document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQuickFilter("all"); initStoryCards(); });
 </script>
 {% endif %}
 </head>
@@ -303,6 +359,46 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
   {% set rr_risk = 'token-low' if avg_rr >= 2 else ('token-mid' if avg_rr >= 1.4 else 'token-high') %}
   {% set gate_risk = 'token-low' if gate_rate >= 80 else ('token-mid' if gate_rate >= 60 else 'token-high') %}
   {% set action_head = top_picks[0].symbol if top_picks else 'Top Pick 없음' %}
+  {% set trend = namespace(v=0) %}
+  {% for r in table_rows %}
+    {% if r.ma20 and r.ma200 and r.close and r.close > r.ma20 and r.ma20 > r.ma200 %}
+      {% set trend.v = trend.v + 1 %}
+    {% endif %}
+  {% endfor %}
+  {% set trend_ratio = ((trend.v / (table_rows|length)) * 100) if table_rows else 0 %}
+  {% set watch_count = pullback_buy_rows|length %}
+  {% set immediate_count = immediate_buy_rows|length %}
+  {% set watch_surge = watch_count >= (immediate_count + 5) %}
+
+  <div class="story-strip" aria-label="story-card-strip">
+    <div class="story-card">
+      <div class="story-title">추세 우위 종목 비율</div>
+      <div class="story-metric">📈 {{ "%.1f"|format(trend_ratio) }}%</div>
+      <div class="story-description">MA20 &gt; MA200 위에서 종가가 유지되는 비율입니다.</div>
+      <details class="story-note">
+        <summary>왜 중요한가?</summary>
+        <div>추세 정렬이 잘 된 종목 비중이 높을수록 돌파·추세 추종 전략의 성공 확률이 개선됩니다.</div>
+      </details>
+    </div>
+    <div class="story-card">
+      <div class="story-title">즉시 진입 평균 RR</div>
+      <div class="story-metric">⚖️ {{ "%.2f"|format(avg_rr) }}</div>
+      <div class="story-description">오늘 즉시 진입 후보의 기대 보상/위험 평균입니다.</div>
+      <details class="story-note">
+        <summary>왜 중요한가?</summary>
+        <div>평균 RR이 높을수록 동일 손실 대비 기대수익 여지가 커져 포트폴리오 효율에 유리합니다.</div>
+      </details>
+    </div>
+    <div class="story-card">
+      <div class="story-title">관망 종목 급증 여부</div>
+      <div class="story-metric">👀 {{ '급증' if watch_surge else '안정' }} ({{ watch_count }}개)</div>
+      <div class="story-description">되돌림 대기 후보 수가 즉시 진입 후보보다 크게 많으면 급증으로 표시합니다.</div>
+      <details class="story-note">
+        <summary>왜 중요한가?</summary>
+        <div>관망 후보 급증은 단기 과열·진입 타이밍 미스매치 신호일 수 있어 추격 매수 리스크 점검이 필요합니다.</div>
+      </details>
+    </div>
+  </div>
 
   <div class="decision-strip" aria-label="decision-strip">
     <div class="decision-block">
