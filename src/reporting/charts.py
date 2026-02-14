@@ -2,6 +2,7 @@ from __future__ import annotations
 import base64
 import io
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -55,8 +56,8 @@ def _candles(ax, df: pd.DataFrame):
         ax.add_patch(rect)
     ax.set_xlim(-1, len(df))
 
-def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180) -> str:
-    """Return base64 PNG for single symbol. Price + RSI subchart, zones overlay."""
+def _build_symbol_chart_png(df: pd.DataFrame, ctx: dict, lookback: int=180) -> bytes:
+    """Build a single-symbol chart PNG bytes. Price + RSI subchart, zones overlay."""
     _configure_korean_font()
     full = df.reset_index(drop=True).copy()
     d = full.tail(lookback).reset_index(drop=True).copy()
@@ -142,4 +143,17 @@ def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180) -> str:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
     plt.close(fig)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+    return buf.getvalue()
+
+
+def plot_symbol_chart(df: pd.DataFrame, ctx: dict, lookback: int=180, image_mode: str="base64", image_path: str|None=None) -> str:
+    """Return a chart image reference as base64 payload or file path."""
+    png_bytes = _build_symbol_chart_png(df, ctx, lookback=lookback)
+    if image_mode == "file_link":
+        if not image_path:
+            raise ValueError("image_path is required when image_mode='file_link'")
+        out_path = Path(image_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(png_bytes)
+        return str(out_path)
+    return base64.b64encode(png_bytes).decode("ascii")
