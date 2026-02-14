@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any
 import yaml
 
@@ -103,6 +103,7 @@ class BacktestCfg(BaseModel):
 
     tp: TpCfg = TpCfg()
     strategy: str = "ob_pullback"
+    strategy_params: Dict[str, Any] = Field(default_factory=dict)
     symbols: Any = "TOP500"  # "TOP500" or list[str]
     warmup_bars: int = 260
     max_fetch_count: int = 6000

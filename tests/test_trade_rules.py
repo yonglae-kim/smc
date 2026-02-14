@@ -19,6 +19,7 @@ from src.config import (
     SymbolRegimeCfg,
     TradeCfg,
     UniverseCfg,
+    load_config,
 )
 from src.strategy.soft_score import SoftScoreStrategy
 from src.trading.models import Position
@@ -207,3 +208,30 @@ def test_run_backtest_next_open_fill_does_not_reference_close_branch_vars(monkey
 
     assert isinstance(result, dict)
     assert "equity_curve" in result
+
+
+def test_load_config_reads_backtest_strategy_params(tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+app:
+  out_dir: ./out
+  cache_dir: ./cache
+network: {}
+universe: {}
+analysis: {}
+scoring:
+  weights: {}
+symbol_regime: {}
+report:
+  title: Test Report
+backtest:
+  strategy_params:
+    threshold: 0.77
+""".strip(),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(str(cfg_path))
+
+    assert cfg.backtest.strategy_params["threshold"] == 0.77
