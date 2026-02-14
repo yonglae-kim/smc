@@ -16,6 +16,21 @@ def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
     return px * (1.0 + (fee_bps + slippage_bps) / 10000.0)
 
 
+def _normalize_strategy_context(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    tags = ctx.get("tags")
+    if tags is None:
+        tags = []
+    elif not isinstance(tags, list):
+        tags = list(tags)
+
+    confluence = ctx.get("tag_confluence_ob_fvg")
+    if confluence is None:
+        confluence = "Confluence_OB_FVG" in set(tags)
+    ctx["tag_confluence_ob_fvg"] = bool(confluence)
+    ctx["tags"] = tags
+    return ctx
+
+
 def run_backtest(
     symbols_meta: List[Dict[str, Any]],
     ohlcv_map: Dict[str, pd.DataFrame],
@@ -107,6 +122,7 @@ def run_backtest(
                     df_slice = df[df["date"] <= dt].copy()
                     ctx = analyze_symbol(meta, df_slice, cfg)
                     if ctx:
+                        ctx = _normalize_strategy_context(ctx)
                         ctx = score_candidate(ctx, cfg.scoring.weights)
                         ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
                         trade_rules.update_trailing_stop(pos, ctx)
@@ -233,6 +249,7 @@ def run_backtest(
                 if ctx is None:
                     stats["no_ctx"] += 1
                     continue
+                ctx = _normalize_strategy_context(ctx)
                 ctx = score_candidate(ctx, cfg.scoring.weights)
 
                 signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.get("close", 0.0)))
