@@ -235,3 +235,28 @@ backtest:
     cfg = load_config(str(cfg_path))
 
     assert cfg.backtest.strategy_params["threshold"] == 0.77
+
+
+def test_soft_score_confluence_uses_tag_field_without_tags():
+    cfg = make_cfg()
+    strategy = SoftScoreStrategy(cfg)
+    ctx = sample_ctx().copy()
+    ctx.pop("tags", None)
+    ctx["tag_confluence_ob_fvg"] = True
+
+    result = strategy.evaluate(ctx)
+
+    assert result["breakdown"]["confluence"] == strategy.w_confluence
+    assert result["score"] >= strategy.w_confluence
+
+
+def test_soft_score_confluence_keeps_tags_compatibility():
+    cfg = make_cfg()
+    strategy = SoftScoreStrategy(cfg)
+    ctx = sample_ctx().copy()
+    ctx["tag_confluence_ob_fvg"] = None
+    ctx["tags"] = ["Confluence_OB_FVG"]
+
+    result = strategy.evaluate(ctx)
+
+    assert result["breakdown"]["confluence"] == strategy.w_confluence

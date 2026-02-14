@@ -205,6 +205,7 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         "dist_to_ob_atr": dist_to_ob,
         "dist_to_fvg_atr": dist_to_fvg,
         "tag_confluence_ob_fvg": confluence,
+        "tags": ["Confluence_OB_FVG"] if confluence else [],
         "rs": rs,
         "symbol_regime": symbol_regime,
         "pivots": [{"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength} for p in piv[-40:]],

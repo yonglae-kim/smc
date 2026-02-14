@@ -131,7 +131,12 @@ class SoftScoreStrategy(Strategy):
         breakdown["dist_fvg"] = s_fvg
 
         tags = set(ctx.get("tags", []))
-        if "Confluence_OB_FVG" in tags:
+        confluence_flag = ctx.get("tag_confluence_ob_fvg")
+        if confluence_flag is None:
+            # Backward compatibility for report pipelines that still populate tags only.
+            confluence_flag = "Confluence_OB_FVG" in tags
+
+        if bool(confluence_flag):
             score += self.w_confluence
             breakdown["confluence"] = self.w_confluence
         else:
