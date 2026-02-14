@@ -140,6 +140,30 @@ tbody tr:nth-child(even){background:#f8fafc}
 .token-low{background:#dcfce7;color:#166534}
 .token-mid{background:#fef3c7;color:#92400e}
 .token-high{background:#fee2e2;color:#991b1b}
+
+.toolbar{margin:10px 0 12px 0}
+.toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.quick-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chip-btn{
+  border:1px solid #cbd5e1;
+  background:#fff;
+  color:#334155;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:12px;
+  cursor:pointer;
+}
+.chip-btn.active{background:#dbeafe;border-color:#93c5fd;color:#1e3a8a}
+.status-badges{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.status-badge{display:inline-flex;align-items:center;font-size:11px;color:#1e293b;background:#e2e8f0;border-radius:999px;padding:4px 8px}
+.sort-btn{border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.sort-modal{position:fixed;inset:0;background:rgba(15,23,42,0.48);display:none;align-items:flex-end;z-index:30}
+.sort-modal.open{display:flex}
+.sort-sheet{width:100%;background:#fff;border-radius:16px 16px 0 0;padding:16px;box-shadow:0 -8px 28px rgba(15,23,42,0.2)}
+.sort-option{width:100%;text-align:left;border:1px solid #e2e8f0;background:#fff;border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
+.detail-card[data-symbol]{scroll-margin-top:24px}
+.inline-detail{padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
+.desktop-sort{cursor:pointer}
 @media(max-width:720px){
   .container{padding:18px 14px 40px}
   h1{font-size:22px}
@@ -158,41 +182,98 @@ tbody tr:nth-child(even){background:#f8fafc}
     -webkit-overflow-scrolling:touch;
   }
   .decision-block{min-width:82%;scroll-snap-align:start}
+  .toolbar-row{align-items:stretch}
+  .desktop-sort{pointer-events:none;color:#64748b}
 }
+
 </style>
 {% if include_js %}
 <script>
-function sortTable(n){
+const tableState={query:"",quickFilter:"all",sortColumn:1,sortDir:"desc"};
+
+function sortTable(n, forcedDir){
   const table=document.getElementById("uTable");
-  let switching=true, dir="desc", switchcount=0;
-  while(switching){
-    switching=false;
-    const rows=table.rows;
-    for(let i=1;i<rows.length-1;i++){
-      let shouldSwitch=false;
-      const x=rows[i].getElementsByTagName("TD")[n];
-      const y=rows[i+1].getElementsByTagName("TD")[n];
-      const xv=parseFloat(x.getAttribute("data-sort")||x.innerText)||x.innerText;
-      const yv=parseFloat(y.getAttribute("data-sort")||y.innerText)||y.innerText;
-      if(dir=="asc" && xv>yv) shouldSwitch=true;
-      if(dir=="desc" && xv<yv) shouldSwitch=true;
-      if(shouldSwitch){
-        rows[i].parentNode.insertBefore(rows[i+1], rows[i]);
-        switching=true; switchcount++; break;
-      }
-    }
-    if(!switching && switchcount==0){dir = (dir=="asc")?"desc":"asc"; switching=true;}
-  }
+  const tbody=table.querySelector("tbody");
+  const rows=Array.from(tbody.querySelectorAll("tr.data-row"));
+  const dir = forcedDir || ((tableState.sortColumn===n && tableState.sortDir==="desc") ? "asc" : "desc");
+  rows.sort((a,b)=>{
+    const x=a.getElementsByTagName("TD")[n];
+    const y=b.getElementsByTagName("TD")[n];
+    const xvRaw=x.getAttribute("data-sort")||x.innerText;
+    const yvRaw=y.getAttribute("data-sort")||y.innerText;
+    const xvNum=parseFloat(xvRaw);
+    const yvNum=parseFloat(yvRaw);
+    const bothNum=!Number.isNaN(xvNum)&&!Number.isNaN(yvNum);
+    let cmp=0;
+    if(bothNum) cmp=xvNum-yvNum;
+    else cmp=String(xvRaw).localeCompare(String(yvRaw));
+    return dir==="asc" ? cmp : -cmp;
+  });
+  rows.forEach((row)=>{
+    const detail=row.nextElementSibling;
+    tbody.appendChild(row);
+    if(detail && detail.classList.contains("detail-row")) tbody.appendChild(detail);
+  });
+  tableState.sortColumn=n;
+  tableState.sortDir=dir;
+  updateStatusBadges();
+  applyAllFilters();
 }
 function filterTable(){
-  const q=document.getElementById("q").value.toLowerCase();
-  const table=document.getElementById("uTable");
-  const rows=table.getElementsByTagName("tr");
-  for(let i=1;i<rows.length;i++){
-    const txt=rows[i].innerText.toLowerCase();
-    rows[i].style.display = txt.indexOf(q)>-1 ? "" : "none";
-  }
+  tableState.query=document.getElementById("q").value.toLowerCase();
+  applyAllFilters();
+  updateStatusBadges();
 }
+function applyQuickFilter(type){
+  tableState.quickFilter=type;
+  document.querySelectorAll(".chip-btn").forEach((btn)=>btn.classList.toggle("active", btn.dataset.filter===type));
+  applyAllFilters();
+  updateStatusBadges();
+}
+function applyAllFilters(){
+  const table=document.getElementById("uTable");
+  if(!table) return;
+  const rows=table.querySelectorAll("tbody tr.data-row");
+  rows.forEach((row)=>{
+    const txt=row.innerText.toLowerCase();
+    const detail=row.nextElementSibling;
+    const hitQuery=txt.indexOf(tableState.query)>-1;
+    const score=parseFloat(row.dataset.score||"0");
+    const rank=parseFloat(row.dataset.rank||"9999");
+    const gate=row.dataset.gate||"";
+    let hitQuick=true;
+    if(tableState.quickFilter==="rr2") hitQuick=score>=2;
+    if(tableState.quickFilter==="scoreTop") hitQuick=rank<=50;
+    if(tableState.quickFilter==="gatePass") hitQuick=gate==="1";
+    const visible=hitQuery && hitQuick;
+    row.style.display=visible ? "" : "none";
+    if(detail && detail.classList.contains("detail-row")) detail.style.display=(visible && row.dataset.expanded==="1") ? "" : "none";
+  });
+}
+function openSortSheet(){ const el=document.getElementById("sortModal"); if(el) el.classList.add("open"); }
+function closeSortSheet(){ const el=document.getElementById("sortModal"); if(el) el.classList.remove("open"); }
+function sortByOption(col, dir){ sortTable(col, dir); closeSortSheet(); }
+function updateStatusBadges(){
+  const queryBadge=document.getElementById("queryBadge");
+  const filterBadge=document.getElementById("filterBadge");
+  const sortBadge=document.getElementById("sortBadge");
+  if(queryBadge) queryBadge.innerText=tableState.query ? `검색: ${tableState.query}` : "검색: 전체";
+  const filterMap={all:"필터: 없음",rr2:"필터: RR 2.0+",scoreTop:"필터: 점수 상위",gatePass:"필터: 게이트 통과"};
+  if(filterBadge) filterBadge.innerText=filterMap[tableState.quickFilter] || filterMap.all;
+  const sortMap={0:"순위",1:"점수",6:"종가",7:"MA20",8:"MA200",9:"Slope20%",10:"RSI"};
+  if(sortBadge) sortBadge.innerText=`정렬: ${sortMap[tableState.sortColumn]||"점수"} ${tableState.sortDir==="asc"?"오름차순":"내림차순"}`;
+}
+function openRowDetail(row){
+  const symbol=(row.dataset.symbol||"").toLowerCase();
+  const target=document.querySelector(`.detail-card[data-symbol="${symbol}"]`);
+  if(target){ target.scrollIntoView({behavior:"smooth", block:"start"}); return; }
+  const detail=row.nextElementSibling;
+  if(!detail || !detail.classList.contains("detail-row")) return;
+  const isOpen=row.dataset.expanded==="1";
+  row.dataset.expanded=isOpen ? "0" : "1";
+  detail.style.display=isOpen ? "none" : "";
+}
+document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQuickFilter("all"); });
 </script>
 {% endif %}
 </head>
@@ -456,7 +537,7 @@ function filterTable(){
 
 <h2 class="section-title">매수 상세 카드</h2>
 {% for c in buy_details %}
-<div class="card">
+<div class="card detail-card" data-symbol="{{ c.symbol|lower }}">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
     <div>
       <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
@@ -502,7 +583,7 @@ function filterTable(){
 
 <h2 class="section-title">매도 상세 카드</h2>
 {% for c in sell_details %}
-<div class="card">
+<div class="card detail-card" data-symbol="{{ c.symbol|lower }}">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
     <div>
       <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
@@ -538,31 +619,46 @@ function filterTable(){
 
 <h2 class="section-title">Top500 요약</h2>
 {% if include_js %}
-<div style="margin:8px 0 10px 0">
-  <input id="q" onkeyup="filterTable()" placeholder="심볼/이름/태그 검색..."/>
+<div class="toolbar">
+  <div class="toolbar-row">
+    <input id="q" onkeyup="filterTable()" placeholder="심볼/이름/태그 검색..."/>
+    <button class="sort-btn mobile-only" type="button" onclick="openSortSheet()">정렬</button>
+  </div>
+  <div class="quick-chips">
+    <button class="chip-btn active" type="button" data-filter="all" onclick="applyQuickFilter('all')">전체</button>
+    <button class="chip-btn" type="button" data-filter="rr2" onclick="applyQuickFilter('rr2')">RR 2.0+</button>
+    <button class="chip-btn" type="button" data-filter="scoreTop" onclick="applyQuickFilter('scoreTop')">점수 상위</button>
+    <button class="chip-btn" type="button" data-filter="gatePass" onclick="applyQuickFilter('gatePass')">게이트 통과</button>
+  </div>
+  <div class="status-badges">
+    <span id="queryBadge" class="status-badge">검색: 전체</span>
+    <span id="filterBadge" class="status-badge">필터: 없음</span>
+    <span id="sortBadge" class="status-badge">정렬: 점수 내림차순</span>
+  </div>
 </div>
 {% endif %}
 <div class="table-wrap">
   <table id="uTable">
     <thead>
       <tr>
-        <th onclick="sortTable(0)">순위</th>
-        <th onclick="sortTable(1)">점수</th>
+        <th class="desktop-sort" onclick="sortTable(0)">순위</th>
+        <th class="desktop-sort" onclick="sortTable(1)">점수</th>
         <th>심볼</th>
         <th>종목명</th>
         <th>시장</th>
         <th>태그</th>
-        <th onclick="sortTable(6)">종가</th>
-        <th onclick="sortTable(7)">MA20</th>
-        <th onclick="sortTable(8)">MA200</th>
-        <th onclick="sortTable(9)">Slope20%</th>
-        <th onclick="sortTable(10)">RSI</th>
+        <th class="desktop-sort" onclick="sortTable(6)">종가</th>
+        <th class="desktop-sort" onclick="sortTable(7)">MA20</th>
+        <th class="desktop-sort" onclick="sortTable(8)">MA200</th>
+        <th class="desktop-sort" onclick="sortTable(9)">Slope20%</th>
+        <th class="desktop-sort" onclick="sortTable(10)">RSI</th>
         <th>레벨</th>
       </tr>
     </thead>
     <tbody>
     {% for r in table_rows %}
-      <tr>
+      {% set gate_pass = 1 if ('gate_pass' in (r.tags|join(' ')|lower) or 'pass' in (r.tags|join(' ')|lower)) else 0 %}
+      <tr class="data-row" data-symbol="{{ r.symbol|lower }}" data-score="{{ r.score }}" data-rank="{{ r.rank }}" data-gate="{{ gate_pass }}" data-expanded="0" onclick="openRowDetail(this)">
         <td data-sort="{{ r.rank }}">{{ r.rank }}</td>
         <td data-sort="{{ r.score }}">{{ "%.1f"|format(r.score) }}</td>
         <td>{{ r.symbol }}</td>
@@ -576,9 +672,28 @@ function filterTable(){
         <td data-sort="{{ r.rsi14 or 0 }}">{{ "%.1f"|format(r.rsi14) if r.rsi14 else "" }}</td>
         <td>{{ r.levels }}</td>
       </tr>
+      <tr class="detail-row" style="display:none">
+        <td colspan="12">
+          <div class="inline-detail">
+            <div style="font-weight:700">{{ r.symbol }} · {{ r.name }}</div>
+            <div class="small" style="margin-top:4px">시장 {{ r.market }} · 점수 {{ "%.1f"|format(r.score) }} · 종가 {{ "%.0f"|format(r.close) }}</div>
+            <div class="small" style="margin-top:4px">태그 {{ r.tags|join(', ') }} · 레벨 {{ r.levels }}</div>
+          </div>
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
+</div>
+<div id="sortModal" class="sort-modal mobile-only" onclick="if(event.target===this) closeSortSheet()">
+  <div class="sort-sheet">
+    <div style="font-weight:700">정렬 기준</div>
+    <button class="sort-option" type="button" onclick="sortByOption(1,'desc')">점수 높은 순</button>
+    <button class="sort-option" type="button" onclick="sortByOption(1,'asc')">점수 낮은 순</button>
+    <button class="sort-option" type="button" onclick="sortByOption(0,'asc')">순위 빠른 순</button>
+    <button class="sort-option" type="button" onclick="sortByOption(10,'desc')">RSI 높은 순</button>
+    <button class="sort-option" type="button" onclick="closeSortSheet()">닫기</button>
+  </div>
 </div>
 </div>
 </body>
