@@ -113,6 +113,8 @@ tbody tr:nth-child(even){background:#f8fafc}
 .mobile-candidate-gate{margin-top:8px;font-size:12px;color:#475569}
 .mobile-candidate-card details{margin-top:8px}
 .mobile-candidate-card summary{cursor:pointer;font-size:12px;color:#1d4ed8}
+.progressive-hidden{display:none !important}
+.more-btn{margin-top:10px;border:1px solid #cbd5e1;background:#fff;color:#1e293b;border-radius:10px;padding:8px 12px;font-size:12px;cursor:pointer}
 .decision-strip{
   margin-top:18px;
   display:grid;
@@ -190,6 +192,21 @@ tbody tr:nth-child(even){background:#f8fafc}
 .sort-sheet{width:100%;background:#fff;border-radius:16px 16px 0 0;padding:16px;box-shadow:0 -8px 28px rgba(15,23,42,0.2)}
 .sort-option{width:100%;text-align:left;border:1px solid #e2e8f0;background:#fff;border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
 .detail-card[data-symbol]{scroll-margin-top:24px}
+
+@media(max-width:720px){
+  body.mobile-lite{background:#f8fafc}
+  body.mobile-lite .header,
+  body.mobile-lite .card,
+  body.mobile-lite .story-card,
+  body.mobile-lite .decision-block,
+  body.mobile-lite .table-wrap,
+  body.mobile-lite .mobile-candidate-card{box-shadow:none}
+  body.mobile-lite .card,
+  body.mobile-lite .story-card,
+  body.mobile-lite .decision-block,
+  body.mobile-lite .table-wrap,
+  body.mobile-lite .mobile-candidate-card{border-color:#e2e8f0;border-radius:10px}
+}
 .inline-detail{padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
 .desktop-sort{cursor:pointer}
 @media(max-width:720px){
@@ -228,6 +245,21 @@ tbody tr:nth-child(even){background:#f8fafc}
 {% if include_js %}
 <script>
 const tableState={query:"",quickFilter:"all",sortColumn:1,sortDir:"desc"};
+function initProgressiveRows(group, step=20){
+  const rows=Array.from(document.querySelectorAll(`[data-progressive-group="${group}"]`));
+  if(!rows.length) return;
+  let visible=Math.min(step, rows.length);
+  const apply=()=>rows.forEach((row, idx)=>row.classList.toggle("progressive-hidden", idx>=visible));
+  apply();
+  const btn=document.querySelector(`[data-more-button="${group}"]`);
+  if(!btn){return;}
+  if(rows.length<=step){btn.style.display="none";return;}
+  btn.addEventListener("click", ()=>{
+    visible=Math.min(visible+step, rows.length);
+    apply();
+    if(visible>=rows.length) btn.style.display="none";
+  });
+}
 
 function sortTable(n, forcedDir){
   const table=document.getElementById("uTable");
@@ -329,11 +361,19 @@ function initStoryCards(){
   }, {threshold:0.18, rootMargin:"0px 0px -8% 0px"});
   cards.forEach((card)=>observer.observe(card));
 }
-document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQuickFilter("all"); initStoryCards(); });
+document.addEventListener("DOMContentLoaded",()=>{
+  updateStatusBadges();
+  applyQuickFilter("all");
+  initStoryCards();
+  initProgressiveRows("watch-row-desktop");
+  initProgressiveRows("watch-row-mobile");
+  initProgressiveRows("table-row");
+  initProgressiveRows("trade-row");
+});
 </script>
 {% endif %}
 </head>
-<body>
+<body class="{% if mobile_light_mode %}mobile-lite{% endif %}">
 <div class="container">
   <div class="header">
     <h1>{{ title }}</h1>
@@ -520,8 +560,8 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
       </tr>
     </thead>
     <tbody>
-    {% for b in pullback_buy_rows %}
-      <tr>
+  {% for b in pullback_buy_rows %}
+      <tr data-progressive-group="watch-row-desktop">
         <td>{{ b.rank }}</td>
         <td>{{ "%.2f"|format(b.signal.score) }}</td>
         <td>{{ b.symbol }}</td>
@@ -547,7 +587,7 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
 </div>
 <div class="mobile-only mobile-candidate-list">
   {% for b in pullback_buy_rows %}
-  <div class="mobile-candidate-card">
+  <div class="mobile-candidate-card" data-progressive-group="watch-row-mobile">
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
@@ -566,6 +606,8 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
   </div>
   {% endfor %}
 </div>
+<button class="more-btn desktop-only" type="button" data-more-button="watch-row-desktop">관망 후보 더 보기</button>
+<button class="more-btn mobile-only" type="button" data-more-button="watch-row-mobile">관망 후보 더 보기</button>
 
 <h3 class="section-title">관망 후보</h3>
 <div class="small">현재 관망 후보가 없습니다.</div>
@@ -587,7 +629,7 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
     </thead>
     <tbody>
     {% for s in sell_rows %}
-      <tr>
+      <tr data-progressive-group="trade-row">
         <td>{{ s.symbol }}</td>
         <td>{{ s.name }}</td>
         <td>{{ "%.0f"|format(s.entry_price) }}</td>
@@ -600,6 +642,7 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
     </tbody>
   </table>
 </div>
+<button class="more-btn" type="button" data-more-button="trade-row">거래내역 더 보기</button>
 
 <h2 class="section-title">포트폴리오 상태</h2>
 <div class="table-wrap">
@@ -656,7 +699,7 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
 
   <div class="grid" style="margin-top:10px">
     <div>
-      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="data:image/png;base64,{{ c.chart_b64 }}"/>
+      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="{{ c.chart_src }}"/>
     </div>
     <div>
       <div style="font-weight:700;margin-bottom:6px">주요 레벨 / 컨텍스트</div>
@@ -665,8 +708,10 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
       <pre>{{ c.gate_text }}</pre>
       <div style="font-weight:700;margin:10px 0 6px 0">점수 분해</div>
       <pre>{{ c.score_text }}</pre>
-      <div style="font-weight:700;margin:10px 0 6px 0">진입 사유</div>
-      <pre>{{ c.reason_text }}</pre>
+      <details>
+        <summary style="font-weight:700;margin:10px 0 6px 0;cursor:pointer">진입 사유</summary>
+        <pre>{{ c.reason_text }}</pre>
+      </details>
       <div class="small" style="margin-top:10px">
         {% for n in c.notes %}
           • {{ n }}<br/>
@@ -701,11 +746,13 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
 
   <div class="grid" style="margin-top:10px">
     <div>
-      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="data:image/png;base64,{{ c.chart_b64 }}"/>
+      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="{{ c.chart_src }}"/>
     </div>
     <div>
-      <div style="font-weight:700;margin-bottom:6px">청산 사유</div>
-      <pre>{{ c.reason_text }}</pre>
+      <details>
+        <summary style="font-weight:700;margin-bottom:6px;cursor:pointer">청산 사유</summary>
+        <pre>{{ c.reason_text }}</pre>
+      </details>
       <div style="font-weight:700;margin:10px 0 6px 0">점수 분해</div>
       <pre>{{ c.score_text }}</pre>
     </div>
@@ -754,7 +801,7 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
     <tbody>
     {% for r in table_rows %}
       {% set gate_pass = 1 if ('gate_pass' in (r.tags|join(' ')|lower) or 'pass' in (r.tags|join(' ')|lower)) else 0 %}
-      <tr class="data-row" data-symbol="{{ r.symbol|lower }}" data-score="{{ r.score }}" data-rank="{{ r.rank }}" data-gate="{{ gate_pass }}" data-expanded="0" onclick="openRowDetail(this)">
+      <tr class="data-row" data-progressive-group="table-row" data-symbol="{{ r.symbol|lower }}" data-score="{{ r.score }}" data-rank="{{ r.rank }}" data-gate="{{ gate_pass }}" data-expanded="0" onclick="openRowDetail(this)">
         <td data-sort="{{ r.rank }}">{{ r.rank }}</td>
         <td data-sort="{{ r.score }}">{{ "%.1f"|format(r.score) }}</td>
         <td>{{ r.symbol }}</td>
@@ -781,6 +828,7 @@ document.addEventListener("DOMContentLoaded",()=>{ updateStatusBadges(); applyQu
     </tbody>
   </table>
 </div>
+<button class="more-btn" type="button" data-more-button="table-row">Top500 더 보기</button>
 <div id="sortModal" class="sort-modal mobile-only" onclick="if(event.target===this) closeSortSheet()">
   <div class="sort-sheet">
     <div style="font-weight:700">정렬 기준</div>

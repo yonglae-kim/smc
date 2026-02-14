@@ -241,6 +241,12 @@ def run(config_path: str) -> None:
             remaining_entries.append(pe)
     pending_entries = remaining_entries
 
+    chart_mode = str(getattr(cfg.report, "chart_image_mode", "inline_base64"))
+    use_chart_files = chart_mode == "file_link"
+    chart_dir = os.path.join(out_dir, "charts")
+    if use_chart_files:
+        os.makedirs(chart_dir, exist_ok=True)
+
     sell_rows = []
     portfolio_rows = []
     sell_details = []
@@ -308,7 +314,7 @@ def run(config_path: str) -> None:
                     "next_action": next_action,
                 }
             )
-            chart_b64 = None
+            chart_src = ""
             if ctx:
                 ctx = dict(ctx)
                 ctx["position"] = pos.to_dict()
@@ -320,7 +326,15 @@ def run(config_path: str) -> None:
                     df_chart["ma200"] = sma(df_chart["close"], int(cfg.analysis.ma_slow))
                     df_chart["rsi14"] = rsi(df_chart["close"], int(cfg.analysis.rsi_period))
                     df_chart["atr14"] = atr(df_chart, int(cfg.analysis.atr_period))
-                    chart_b64 = plot_symbol_chart(df_chart, ctx, lookback=int(cfg.report.chart_lookback))
+                    chart_path = os.path.join(chart_dir, f"sell_{pos.symbol}_{ymd}.png") if use_chart_files else None
+                    chart_payload = plot_symbol_chart(
+                        df_chart,
+                        ctx,
+                        lookback=int(cfg.report.chart_lookback),
+                        image_mode="file_link" if use_chart_files else "base64",
+                        image_path=chart_path,
+                    )
+                    chart_src = f"charts/{os.path.basename(chart_payload)}" if use_chart_files else f"data:image/png;base64,{chart_payload}"
             breakdown = (ctx or {}).get("soft_score_breakdown", {})
             score_text = "\n".join(trade_rules.describe_score_breakdown(breakdown)) if breakdown else "(no components)"
             sell_details.append(
@@ -334,7 +348,7 @@ def run(config_path: str) -> None:
                     "pnl_pct": pnl_pct,
                     "next_action": next_action,
                     "tags": (ctx or {}).get("tags", []),
-                    "chart_b64": chart_b64 or "",
+                    "chart_src": chart_src,
                     "score_text": score_text,
                     "reason_text": "\n".join(trade_rules.build_sell_reasons(exit_decisions, pos, ctx or {})),
                 }
@@ -401,7 +415,15 @@ def run(config_path: str) -> None:
         df["ma200"] = sma(df["close"], int(cfg.analysis.ma_slow))
         df["rsi14"] = rsi(df["close"], int(cfg.analysis.rsi_period))
         df["atr14"] = atr(df, int(cfg.analysis.atr_period))
-        c["chart_b64"] = plot_symbol_chart(df, c, lookback=int(cfg.report.chart_lookback))
+        chart_path = os.path.join(chart_dir, f"buy_{c['symbol']}_{ymd}.png") if use_chart_files else None
+        chart_payload = plot_symbol_chart(
+            df,
+            c,
+            lookback=int(cfg.report.chart_lookback),
+            image_mode="file_link" if use_chart_files else "base64",
+            image_path=chart_path,
+        )
+        c["chart_src"] = f"charts/{os.path.basename(chart_payload)}" if use_chart_files else f"data:image/png;base64,{chart_payload}"
         lev=[]
         if c.get("bos",{}).get("direction"):
             lev.append(f"BOS {c['bos']['direction']} level={c['bos']['level']:.0f} q={c['bos'].get('quality',0):.2f}")
@@ -456,6 +478,7 @@ def run(config_path: str) -> None:
         "portfolio_rows": portfolio_rows,
         "buy_details": buy_details,
         "sell_details": sell_details,
+        "mobile_light_mode": bool(getattr(cfg.report, "mobile_light_mode", True)),
     }
     out_html = os.path.join(out_dir, "report.html")
     render_report(out_html, payload, include_js=bool(cfg.report.include_sort_search_js))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import io, base64, re
+from pathlib import Path
 from typing import Dict, Any
 from jinja2 import Template
 import matplotlib.pyplot as plt
@@ -31,11 +32,35 @@ details summary{cursor:pointer;color:#333}
 .trade-mobile-head{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center}
 .trade-mobile-symbol{font-size:16px;font-weight:700}
 .trade-mobile-pnl{font-size:16px;font-weight:700}
+.progressive-hidden{display:none}
+button.more-btn{margin-top:10px;padding:7px 11px;border:1px solid #d4d4d8;border-radius:9px;background:#fff;cursor:pointer}
 @media(max-width:720px){
   .desktop-only{display:none}
   .mobile-only{display:block}
 }
 </style>
+<script>
+function initProgressiveList(group){
+  const nodes=[...document.querySelectorAll(`[data-progressive-group="${group}"]`)];
+  if(!nodes.length) return;
+  const step=20;
+  let visible=Math.min(step,nodes.length);
+  nodes.forEach((node,idx)=>node.classList.toggle("progressive-hidden", idx>=visible));
+  const btn=document.querySelector(`[data-more-button="${group}"]`);
+  if(!btn) return;
+  if(nodes.length<=step){btn.style.display="none";return;}
+  btn.addEventListener("click",()=>{
+    visible=Math.min(visible+step,nodes.length);
+    nodes.forEach((node,idx)=>node.classList.toggle("progressive-hidden", idx>=visible));
+    if(visible>=nodes.length) btn.style.display="none";
+  });
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  initProgressiveList("trade-row");
+  initProgressiveList("trade-mobile");
+  initProgressiveList("trade-detail-card");
+});
+</script>
 </head>
 <body>
 <h1>{{ title }}</h1>
@@ -63,7 +88,7 @@ details summary{cursor:pointer;color:#333}
 
 <div class="card">
   <h2>에퀴티 커브</h2>
-  <img style="width:100%;border-radius:10px;border:1px solid #eee" src="data:image/png;base64,{{ equity_png }}"/>
+  <img style="width:100%;border-radius:10px;border:1px solid #eee" src="{{ equity_img_src }}"/>
 </div>
 
 <div class="card">
@@ -119,7 +144,7 @@ details summary{cursor:pointer;color:#333}
     </thead>
     <tbody>
     {% for t in trades %}
-      <tr>
+      <tr data-progressive-group="trade-row">
         <td>{{ t.symbol }} {{ t.get("name", "") }}</td><td>{{ t.entry_date }}</td><td>{{ t.exit_date }}</td>
         <td>{{ "%.2f"|format(t.entry_px) }}</td><td>{{ "%.2f"|format(t.exit_px) }}</td>
         <td>{{ "%.0f"|format(t.pnl) }}</td>
@@ -131,7 +156,10 @@ details summary{cursor:pointer;color:#333}
         <td>{{ t.get("entry_structure_bias", "-") }}</td>
         <td>
           {% if t.exit_reason_lines %}
-            <ul>{% for r in t.exit_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
+            <details>
+              <summary>보기</summary>
+              <ul>{% for r in t.exit_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
+            </details>
           {% else %}
             -
           {% endif %}
@@ -149,7 +177,10 @@ details summary{cursor:pointer;color:#333}
         </td>
         <td>
           {% if t.entry_reason_lines %}
-            <ul>{% for r in t.entry_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
+            <details>
+              <summary>보기</summary>
+              <ul>{% for r in t.entry_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
+            </details>
           {% else %}
             -
           {% endif %}
@@ -161,7 +192,7 @@ details summary{cursor:pointer;color:#333}
   </div>
   <div class="mobile-only trade-mobile-list">
     {% for t in trades %}
-    <div class="trade-mobile-card">
+    <div class="trade-mobile-card" data-progressive-group="trade-mobile">
       <div class="trade-mobile-head">
         <div class="trade-mobile-symbol">{{ t.symbol }}</div>
         <div class="trade-mobile-pnl">{{ "%.0f"|format(t.pnl) }}</div>
@@ -196,13 +227,15 @@ details summary{cursor:pointer;color:#333}
     </div>
     {% endfor %}
   </div>
+  <button class="more-btn" type="button" data-more-button="trade-row">거래내역 더 보기</button>
+  <button class="more-btn mobile-only" type="button" data-more-button="trade-mobile">모바일 거래내역 더 보기</button>
 </div>
 
 <div class="card">
   <h2>상세 보기 카드</h2>
   <div class="detail-grid">
     {% for t in trades %}
-      <div class="detail-card">
+      <div class="detail-card" data-progressive-group="trade-detail-card">
         <div><strong>{{ t.symbol }}</strong> {{ t.get("name", "") }}</div>
         <div class="small">{{ t.entry_date }} → {{ t.exit_date }}</div>
         <div>진입 {{ "%.2f"|format(t.entry_px) }} · 청산 {{ "%.2f"|format(t.exit_px) }} · PnL {{ "%.0f"|format(t.pnl) }}</div>
@@ -215,6 +248,7 @@ details summary{cursor:pointer;color:#333}
       </div>
     {% endfor %}
   </div>
+  <button class="more-btn" type="button" data-more-button="trade-detail-card">상세 카드 더 보기</button>
 </div>
 </body>
 </html>""")
@@ -276,6 +310,7 @@ def _early_exit_summary(trades: list[dict]) -> list[dict]:
 
 def render_backtest_report(path: str, payload: Dict[str,Any]) -> None:
     payload = dict(payload)
+    image_mode = str(payload.get("chart_image_mode", "inline_base64"))
     trades = []
     for t in payload.get("trades", []):
         trade = dict(t)
@@ -289,7 +324,14 @@ def render_backtest_report(path: str, payload: Dict[str,Any]) -> None:
         trades.append(trade)
     payload["trades"] = trades
     payload["early_exit_summary"] = _early_exit_summary(trades)
-    payload["equity_png"] = _equity_png(payload.get("equity_curve", []))
+    equity_png = _equity_png(payload.get("equity_curve", []))
+    if image_mode == "file_link":
+        out_path = Path(path)
+        chart_path = out_path.with_name(f"{out_path.stem}_equity.png")
+        chart_path.write_bytes(base64.b64decode(equity_png))
+        payload["equity_img_src"] = chart_path.name
+    else:
+        payload["equity_img_src"] = f"data:image/png;base64,{equity_png}"
     html = HTML.render(**payload)
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)
