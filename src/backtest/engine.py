@@ -258,13 +258,14 @@ def run_backtest(
                     entry_dt = df_after["date"].iloc[0]
                     open_px = float(df_after["open"].iloc[0])
                     low_px = float(df_after["low"].iloc[0])
+                    plan_anchor_px = open_px
                 else:
                     d = df_full[df_full["date"] == dt]
                     if d.empty:
                         continue
                     open_px = float(d["open"].iloc[0])
                     low_px = float(d["low"].iloc[0])
-                plan_anchor_px = open_px if fill_price == "next_open" else float(d["close"].iloc[0])
+                    plan_anchor_px = float(d["close"].iloc[0])
                 entry_plan = trade_rules.build_entry_plan(ctx, plan_anchor_px)
                 if low_px > entry_plan.entry_price:
                     continue

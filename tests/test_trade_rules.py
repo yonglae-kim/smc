@@ -171,3 +171,39 @@ def test_end_to_end_smoke():
     result = run_backtest(symbols, {"000000": df}, cfg, strategy)
     assert "equity_curve" in result
     assert result["start"] == "2024-01-01"
+
+
+def test_run_backtest_next_open_fill_does_not_reference_close_branch_vars(monkeypatch):
+    cfg = make_cfg()
+    cfg.backtest.fill_price = "next_open"
+    cfg.trade.entry_price_mode = "next_open"
+    strategy = SoftScoreStrategy(cfg)
+
+    dates = pd.date_range("2023-10-01", periods=120, freq="D")
+    prices = pd.Series(range(100, 100 + len(dates)), dtype=float)
+    df = pd.DataFrame(
+        {
+            "date": dates,
+            "open": prices,
+            "high": prices + 1,
+            "low": prices - 2,
+            "close": prices + 0.5,
+            "volume": 100000,
+        }
+    )
+
+    def fake_analyze_symbol(meta, df_slice, _cfg):
+        ctx = sample_ctx().copy()
+        ctx["symbol"] = meta["symbol"]
+        ctx["name"] = meta.get("name", "")
+        ctx["close"] = float(df_slice["close"].iloc[-1])
+        return ctx
+
+    monkeypatch.setattr("src.backtest.engine.analyze_symbol", fake_analyze_symbol)
+    monkeypatch.setattr("src.backtest.engine.score_candidate", lambda ctx, _: ctx)
+
+    symbols = [{"symbol": "000000", "name": "Sample", "market": "KOSPI"}]
+    result = run_backtest(symbols, {"000000": df}, cfg, strategy)
+
+    assert isinstance(result, dict)
+    assert "equity_curve" in result
