@@ -193,6 +193,10 @@ tbody tr:nth-child(even){background:#f8fafc}
 .sort-option{width:100%;text-align:left;border:1px solid #e2e8f0;background:#fff;border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
 .detail-card[data-symbol]{scroll-margin-top:24px}
 
+@media(min-width:721px){
+  .sort-modal.open{display:none}
+}
+
 @media(max-width:720px){
   body.mobile-lite{background:#f8fafc}
   body.mobile-lite .header,
@@ -829,7 +833,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   </table>
 </div>
 <button class="more-btn" type="button" data-more-button="table-row">Top500 더 보기</button>
-<div id="sortModal" class="sort-modal mobile-only" onclick="if(event.target===this) closeSortSheet()">
+<div id="sortModal" class="sort-modal" onclick="if(event.target===this) closeSortSheet()">
   <div class="sort-sheet">
     <div style="font-weight:700">정렬 기준</div>
     <button class="sort-option" type="button" onclick="sortByOption(1,'desc')">점수 높은 순</button>
