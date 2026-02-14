@@ -99,6 +99,7 @@ backtest:
   max_positions: 10
   risk_per_trade: 0.01
   stop_grace_days: 15
+  allow_non_stop_exits_during_stop_grace: true # 손절 유예기간 중 TP/비손절 EXIT 허용
   strategy_params:
     threshold: 3.5
     min_room_to_high_atr: 0.75

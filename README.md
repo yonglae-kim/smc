@@ -43,3 +43,7 @@ The runner/backtest print periodic progress lines (UniverseScan/Analyze/FetchOHL
 
 ## Backtest strategy: SoftScoreStrategy
 Backtest uses hard-gate + soft-score + Top-K selection (to avoid zero-trade runs). Tune `backtest.strategy_params` in config.yaml.
+
+### Stop grace semantics
+`backtest.stop_grace_days` only suppresses **stop-loss-related exits** during the initial holding window.
+Take-profit and other non-stop exits remain active by default, and can be disabled with `backtest.allow_non_stop_exits_during_stop_grace: false`.

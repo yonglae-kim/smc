@@ -383,14 +383,25 @@ class TradeRules:
         bar: Dict[str, float],
         ctx: Optional[Dict[str, Any]],
         date: str,
+        eval_ctx: Optional[Dict[str, Any]] = None,
     ) -> List[ExitDecision]:
         decisions: List[ExitDecision] = []
         low_px = float(bar.get("low", bar.get("close", 0.0)))
         high_px = float(bar.get("high", bar.get("close", 0.0)))
         close_px = float(bar.get("close", 0.0))
 
-        stop_hit = low_px <= position.stop_loss
+        eval_ctx = eval_ctx or {}
+        stop_grace_active = bool(eval_ctx.get("stop_grace_active", False))
+        allow_non_stop_exits_during_stop_grace = bool(
+            eval_ctx.get("allow_non_stop_exits_during_stop_grace", True)
+        )
+
+        stop_hit = low_px <= position.stop_loss and not stop_grace_active
         tp_hit = high_px >= position.take_profit
+
+        if stop_grace_active and not allow_non_stop_exits_during_stop_grace:
+            decisions.append(ExitDecision(action="HOLD", reason="손절 유예기간: 비손절 EXIT 비활성화"))
+            return decisions
 
         if stop_hit and tp_hit:
             if self.tp_sl_conflict == "optimistic":
