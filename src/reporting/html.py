@@ -103,16 +103,22 @@ tbody tr:nth-child(even){background:#f8fafc}
 .mobile-candidate-head{
   display:grid;
   grid-template-columns:auto auto 1fr;
-  gap:4px 10px;
+  gap:6px 10px;
   align-items:center;
 }
 .mobile-candidate-rank{font-size:18px;font-weight:800;color:#0f172a}
 .mobile-candidate-score{font-size:18px;font-weight:800;color:#1d4ed8}
-.mobile-candidate-symbol{font-size:17px;font-weight:800;color:#0f172a}
-.mobile-candidate-entry{font-size:13px;color:#334155;grid-column:1/-1}
+.mobile-candidate-main{grid-column:3/4;min-width:0}
+.mobile-candidate-symbol-line{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.mobile-candidate-symbol{font-size:16px;font-weight:800;color:#0f172a}
+.mobile-candidate-name{font-size:13px;color:#334155}
+.mobile-candidate-entry{font-size:11px;color:#64748b}
+.mobile-candidate-price{margin-top:4px;font-size:12px;color:#334155}
 .mobile-candidate-gate{margin-top:8px;font-size:12px;color:#475569}
 .mobile-candidate-card details{margin-top:8px}
 .mobile-candidate-card summary{cursor:pointer;font-size:12px;color:#1d4ed8}
+.mobile-candidate-detail{margin-top:8px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px}
+.mobile-candidate-detail img{width:100%;border-radius:10px;border:1px solid #e2e8f0}
 .progressive-hidden{display:none !important}
 .more-btn{margin-top:10px;border:1px solid #cbd5e1;background:#fff;color:#1e293b;border-radius:10px;padding:8px 12px;font-size:12px;cursor:pointer}
 .decision-strip{
@@ -191,7 +197,6 @@ tbody tr:nth-child(even){background:#f8fafc}
 .sort-modal.open{display:flex}
 .sort-sheet{width:100%;background:#fff;border-radius:16px 16px 0 0;padding:16px;box-shadow:0 -8px 28px rgba(15,23,42,0.2)}
 .sort-option{width:100%;text-align:left;border:1px solid #e2e8f0;background:#fff;border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
-.detail-card[data-symbol]{scroll-margin-top:24px}
 
 @media(min-width:721px){
   .sort-modal.open{display:none}
@@ -338,9 +343,6 @@ function updateStatusBadges(){
   if(sortBadge) sortBadge.innerText=`정렬: ${sortMap[tableState.sortColumn]||"점수"} ${tableState.sortDir==="asc"?"오름차순":"내림차순"}`;
 }
 function openRowDetail(row){
-  const symbol=(row.dataset.symbol||"").toLowerCase();
-  const target=document.querySelector(`.detail-card[data-symbol="${symbol}"]`);
-  if(target){ target.scrollIntoView({behavior:"smooth", block:"start"}); return; }
   const detail=row.nextElementSibling;
   if(!detail || !detail.classList.contains("detail-row")) return;
   const isOpen=row.dataset.expanded==="1";
@@ -505,7 +507,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         <td>{{ "%.2f"|format(b.signal.score) }}</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
-        <td>{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
+        <td>타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
@@ -530,17 +532,32 @@ document.addEventListener("DOMContentLoaded",()=>{
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
+    {% set detail = (buy_details|selectattr('symbol', 'equalto', b.symbol)|list|first) %}
     <div class="mobile-candidate-head">
       <div class="mobile-candidate-rank">#{{ b.rank }}</div>
       <div class="mobile-candidate-score">{{ "%.2f"|format(b.signal.score) }}</div>
-      <div class="mobile-candidate-symbol">{{ b.symbol }}</div>
-      <div class="mobile-candidate-entry">{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</div>
+      <div class="mobile-candidate-main">
+        <div class="mobile-candidate-symbol-line">
+          <span class="mobile-candidate-symbol">{{ b.symbol }}</span>
+          <span class="mobile-candidate-name">{{ b.name }}</span>
+          <span class="mobile-candidate-entry">타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</span>
+        </div>
+        <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
+      </div>
     </div>
     <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
     <details>
       <summary>상세 보기</summary>
-      <div class="small" style="margin-top:6px">{{ b.name }}</div>
-      <div class="small" style="margin-top:4px">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }} · RR {{ "%.2f"|format(b.entry_plan.rr) }}</div>
+      {% if detail %}
+      <div class="mobile-candidate-detail">
+        <img src="{{ detail.chart_src }}" alt="{{ detail.symbol }} 차트"/>
+        <div class="small" style="margin-top:8px">RR {{ "%.2f"|format(detail.entry_plan.rr) }} · 기대수익 {{ "%.2f"|format(detail.entry_plan.expected_return*100) }}%</div>
+        <div style="font-weight:700;margin:8px 0 4px 0">진입 사유</div>
+        <pre>{{ detail.reason_text }}</pre>
+      </div>
+      {% else %}
+      <div class="small" style="margin-top:6px">상세 데이터가 없습니다.</div>
+      {% endif %}
     </details>
   </div>
   {% endfor %}
@@ -570,7 +587,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         <td>{{ "%.2f"|format(b.signal.score) }}</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
-        <td>{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
+        <td>타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
@@ -595,17 +612,32 @@ document.addEventListener("DOMContentLoaded",()=>{
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
+    {% set detail = (buy_details|selectattr('symbol', 'equalto', b.symbol)|list|first) %}
     <div class="mobile-candidate-head">
       <div class="mobile-candidate-rank">#{{ b.rank }}</div>
       <div class="mobile-candidate-score">{{ "%.2f"|format(b.signal.score) }}</div>
-      <div class="mobile-candidate-symbol">{{ b.symbol }}</div>
-      <div class="mobile-candidate-entry">{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</div>
+      <div class="mobile-candidate-main">
+        <div class="mobile-candidate-symbol-line">
+          <span class="mobile-candidate-symbol">{{ b.symbol }}</span>
+          <span class="mobile-candidate-name">{{ b.name }}</span>
+          <span class="mobile-candidate-entry">타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</span>
+        </div>
+        <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
+      </div>
     </div>
     <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
     <details>
       <summary>상세 보기</summary>
-      <div class="small" style="margin-top:6px">{{ b.name }}</div>
-      <div class="small" style="margin-top:4px">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }} · RR {{ "%.2f"|format(b.entry_plan.rr) }}</div>
+      {% if detail %}
+      <div class="mobile-candidate-detail">
+        <img src="{{ detail.chart_src }}" alt="{{ detail.symbol }} 차트"/>
+        <div class="small" style="margin-top:8px">RR {{ "%.2f"|format(detail.entry_plan.rr) }} · 기대수익 {{ "%.2f"|format(detail.entry_plan.expected_return*100) }}%</div>
+        <div style="font-weight:700;margin:8px 0 4px 0">진입 사유</div>
+        <pre>{{ detail.reason_text }}</pre>
+      </div>
+      {% else %}
+      <div class="small" style="margin-top:6px">상세 데이터가 없습니다.</div>
+      {% endif %}
     </details>
   </div>
   {% endfor %}
@@ -677,92 +709,6 @@ document.addEventListener("DOMContentLoaded",()=>{
     </tbody>
   </table>
 </div>
-
-<h2 class="section-title">매수 상세 카드</h2>
-{% for c in buy_details %}
-<div class="card detail-card" data-symbol="{{ c.symbol|lower }}">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-    <div>
-      <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
-      <div class="small">점수 {{ "%.2f"|format(c.signal.score) }} · 종가 {{ "%.0f"|format(c.close) }} · MA20 {{ "%.0f"|format(c.ma20 or 0) }} · MA200 {{ "%.0f"|format(c.ma200 or 0) }} · Slope20 {{ "%.2f"|format((c.ma_slope_pct or 0) * 100) }}% · ATR {{ "%.1f"|format(c.atr14 or 0) }} · RS {{ c.rs.tag }}</div>
-      {% if c.last_ohlc %}
-      <div class="small">마지막 OHLC · O {{ "%.0f"|format(c.last_ohlc.open) }} · H {{ "%.0f"|format(c.last_ohlc.high) }} · L {{ "%.0f"|format(c.last_ohlc.low) }} · C {{ "%.0f"|format(c.last_ohlc.close) }}</div>
-      {% endif %}
-      <div style="margin-top:6px">
-        {% for t in c.tags %}
-          <span class="badge">{{ t }}</span>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="small">
-      <div>진입: {{ c.entry_plan.entry_type_label or c.entry_plan.entry_type }} · {{ "%.0f"|format(c.entry_plan.entry_price) }}</div>
-      <div>손절: {{ "%.0f"|format(c.entry_plan.stop_loss) }} · 목표: {{ "%.0f"|format(c.entry_plan.take_profit) }}</div>
-      <div>RR: {{ "%.2f"|format(c.entry_plan.rr) }} · 기대수익: {{ "%.2f"|format(c.entry_plan.expected_return*100) }}%</div>
-    </div>
-  </div>
-
-  <div class="grid" style="margin-top:10px">
-    <div>
-      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="{{ c.chart_src }}"/>
-    </div>
-    <div>
-      <div style="font-weight:700;margin-bottom:6px">주요 레벨 / 컨텍스트</div>
-      <pre>{{ c.context_text }}</pre>
-      <div style="font-weight:700;margin:10px 0 6px 0">게이트 체크</div>
-      <pre>{{ c.gate_text }}</pre>
-      <div style="font-weight:700;margin:10px 0 6px 0">점수 분해</div>
-      <pre>{{ c.score_text }}</pre>
-      <details>
-        <summary style="font-weight:700;margin:10px 0 6px 0;cursor:pointer">진입 사유</summary>
-        <pre>{{ c.reason_text }}</pre>
-      </details>
-      <div class="small" style="margin-top:10px">
-        {% for n in c.notes %}
-          • {{ n }}<br/>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-</div>
-{% endfor %}
-
-<h2 class="section-title">매도 상세 카드</h2>
-{% for c in sell_details %}
-<div class="card detail-card" data-symbol="{{ c.symbol|lower }}">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-    <div>
-      <div style="font-size:18px;font-weight:700">{{ c.symbol }} · {{ c.name }} <span class="small">({{ c.market }})</span></div>
-      <div class="small">진입 {{ "%.0f"|format(c.position.entry_price) }} · 현재 {{ "%.0f"|format(c.close) }} · P/L {{ "%.2f"|format(c.pnl_pct) }}%</div>
-      {% if c.last_ohlc %}
-      <div class="small">마지막 OHLC · O {{ "%.0f"|format(c.last_ohlc.open) }} · H {{ "%.0f"|format(c.last_ohlc.high) }} · L {{ "%.0f"|format(c.last_ohlc.low) }} · C {{ "%.0f"|format(c.last_ohlc.close) }}</div>
-      {% endif %}
-      <div style="margin-top:6px">
-        {% for t in c.tags %}
-          <span class="badge">{{ t }}</span>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="small">
-      <div>손절: {{ "%.0f"|format(c.position.stop_loss) }} · 목표: {{ "%.0f"|format(c.position.take_profit) }}</div>
-      <div>보유: {{ c.position.hold_days }}일 · 다음: {{ c.next_action }}</div>
-    </div>
-  </div>
-
-  <div class="grid" style="margin-top:10px">
-    <div>
-      <img style="width:100%;border-radius:12px;border:1px solid #e2e8f0" src="{{ c.chart_src }}"/>
-    </div>
-    <div>
-      <details>
-        <summary style="font-weight:700;margin-bottom:6px;cursor:pointer">청산 사유</summary>
-        <pre>{{ c.reason_text }}</pre>
-      </details>
-      <div style="font-weight:700;margin:10px 0 6px 0">점수 분해</div>
-      <pre>{{ c.score_text }}</pre>
-    </div>
-  </div>
-</div>
-{% endfor %}
 
 <h2 class="section-title">Top500 요약</h2>
 {% if include_js %}
