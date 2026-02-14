@@ -113,6 +113,33 @@ tbody tr:nth-child(even){background:#f8fafc}
 .mobile-candidate-gate{margin-top:8px;font-size:12px;color:#475569}
 .mobile-candidate-card details{margin-top:8px}
 .mobile-candidate-card summary{cursor:pointer;font-size:12px;color:#1d4ed8}
+.decision-strip{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+.decision-block{
+  background:#fff;
+  border:1px solid #dbe4f4;
+  border-radius:14px;
+  padding:14px;
+  box-shadow:0 8px 18px rgba(15,23,42,0.06);
+}
+.decision-label{font-size:12px;color:#64748b;font-weight:600}
+.decision-value{margin-top:8px;font-size:15px;color:#0f172a;font-weight:700;line-height:1.5}
+.token{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  margin-left:6px;
+}
+.token-low{background:#dcfce7;color:#166534}
+.token-mid{background:#fef3c7;color:#92400e}
+.token-high{background:#fee2e2;color:#991b1b}
 @media(max-width:720px){
   .container{padding:18px 14px 40px}
   h1{font-size:22px}
@@ -122,6 +149,15 @@ tbody tr:nth-child(even){background:#f8fafc}
   .card{padding:14px}
   .desktop-only{display:none}
   .mobile-only{display:block}
+  .decision-strip{
+    display:flex;
+    overflow-x:auto;
+    gap:10px;
+    padding-bottom:6px;
+    scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+  }
+  .decision-block{min-width:82%;scroll-snap-align:start}
 }
 </style>
 {% if include_js %}
@@ -169,6 +205,49 @@ function filterTable(){
       <span>생성 시각 {{ generated_at }} (KST)</span>
       <span>유니버스: 유동성 상위 {{ universe_n }}개</span>
       <span>중위값 기준 {{ liquidity_window }}일</span>
+    </div>
+  </div>
+
+  {% set top_picks = immediate_buy_rows[:3] %}
+  {% set total_rr = namespace(v=0) %}
+  {% set pass_total = namespace(v=0) %}
+  {% set gate_total = namespace(v=0) %}
+  {% for b in immediate_buy_rows %}
+    {% set total_rr.v = total_rr.v + (b.entry_plan.rr or 0) %}
+    {% set pass_total.v = pass_total.v + (b.gates|selectattr('pass')|list|length) %}
+    {% set gate_total.v = gate_total.v + (b.gates|length) %}
+  {% endfor %}
+  {% set avg_rr = (total_rr.v / (immediate_buy_rows|length)) if immediate_buy_rows else 0 %}
+  {% set gate_rate = ((pass_total.v / gate_total.v) * 100) if gate_total.v else 0 %}
+  {% set rr_risk = 'token-low' if avg_rr >= 2 else ('token-mid' if avg_rr >= 1.4 else 'token-high') %}
+  {% set gate_risk = 'token-low' if gate_rate >= 80 else ('token-mid' if gate_rate >= 60 else 'token-high') %}
+  {% set action_head = top_picks[0].symbol if top_picks else 'Top Pick 없음' %}
+
+  <div class="decision-strip" aria-label="decision-strip">
+    <div class="decision-block">
+      <div class="decision-label">오늘의 Top Pick 1~3</div>
+      <div class="decision-value">
+        {% if top_picks %}
+          {% for p in top_picks %}
+            {{ loop.index }}) {{ p.symbol }}{% if not loop.last %}<br/>{% endif %}
+          {% endfor %}
+        {% else %}
+          즉시 진입 후보 없음
+        {% endif %}
+      </div>
+    </div>
+    <div class="decision-block">
+      <div class="decision-label">평균 RR / 게이트 통과율</div>
+      <div class="decision-value">
+        RR {{ "%.2f"|format(avg_rr) }}
+        <span class="token {{ rr_risk }}">{{ '낮음' if rr_risk == 'token-low' else ('보통' if rr_risk == 'token-mid' else '높음') }}</span><br/>
+        게이트 {{ "%.1f"|format(gate_rate) }}%
+        <span class="token {{ gate_risk }}">{{ '낮음' if gate_risk == 'token-low' else ('보통' if gate_risk == 'token-mid' else '높음') }}</span>
+      </div>
+    </div>
+    <div class="decision-block">
+      <div class="decision-label">지금 할 일</div>
+      <div class="decision-value">{{ buy_valid_from }}부터 {{ action_head }} 우선 점검 · {{ execution_guide }}</div>
     </div>
   </div>
 
