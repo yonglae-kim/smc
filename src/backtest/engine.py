@@ -74,6 +74,9 @@ def run_backtest(
     slippage_bps = float(cfg.backtest.slippage_bps)
     fill_price = str(trade_rules.entry_price_mode)
     stop_grace_days = int(getattr(cfg.backtest, "stop_grace_days", 0))
+    allow_non_stop_exits_during_stop_grace = bool(
+        getattr(cfg.backtest, "allow_non_stop_exits_during_stop_grace", True)
+    )
 
     prog = Progress(total=len(cal), label="SimDays", every=25)
     day_i = 0
@@ -127,15 +130,17 @@ def run_backtest(
                         ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
                         trade_rules.update_trailing_stop(pos, ctx)
 
-            if stop_grace_days > 0 and pos.hold_days < stop_grace_days:
-                pos.hold_days += 1
-                continue
+            stop_grace_active = stop_grace_days > 0 and pos.hold_days < stop_grace_days
 
             exit_decisions = trade_rules.evaluate_exit(
                 pos,
                 {"open": float(row["open"]), "high": high_px, "low": low_px, "close": close_px},
                 ctx,
                 date_str,
+                {
+                    "stop_grace_active": stop_grace_active,
+                    "allow_non_stop_exits_during_stop_grace": allow_non_stop_exits_during_stop_grace,
+                },
             )
 
             for d in exit_decisions:
