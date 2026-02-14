@@ -91,6 +91,28 @@ tbody tr:nth-child(even){background:#f8fafc}
   color:#e2e8f0;
   font-size:12px;
 }
+.desktop-only{display:block}
+.mobile-only{display:none}
+.mobile-candidate-list{display:grid;gap:10px}
+.mobile-candidate-card{
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  padding:12px;
+  background:#fff;
+}
+.mobile-candidate-head{
+  display:grid;
+  grid-template-columns:auto auto 1fr;
+  gap:4px 10px;
+  align-items:center;
+}
+.mobile-candidate-rank{font-size:18px;font-weight:800;color:#0f172a}
+.mobile-candidate-score{font-size:18px;font-weight:800;color:#1d4ed8}
+.mobile-candidate-symbol{font-size:17px;font-weight:800;color:#0f172a}
+.mobile-candidate-entry{font-size:13px;color:#334155;grid-column:1/-1}
+.mobile-candidate-gate{margin-top:8px;font-size:12px;color:#475569}
+.mobile-candidate-card details{margin-top:8px}
+.mobile-candidate-card summary{cursor:pointer;font-size:12px;color:#1d4ed8}
 @media(max-width:720px){
   .container{padding:18px 14px 40px}
   h1{font-size:22px}
@@ -98,6 +120,8 @@ tbody tr:nth-child(even){background:#f8fafc}
   table{min-width:640px}
   th,td{font-size:11px;padding:8px 6px}
   .card{padding:14px}
+  .desktop-only{display:none}
+  .mobile-only{display:block}
 }
 </style>
 {% if include_js %}
@@ -158,7 +182,7 @@ function filterTable(){
 <div class="small">시그널은 종가 기준 산출, {{ buy_valid_from }}부터 유효.</div>
 
 <h3 class="section-title">즉시 진입 후보</h3>
-<div class="table-wrap">
+<div class="table-wrap desktop-only">
   <table>
     <thead>
       <tr>
@@ -187,18 +211,43 @@ function filterTable(){
         <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
         <td>{{ "%.2f"|format(b.entry_plan.rr) }}</td>
         <td>
-          {% for g in b.gates %}
-            <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
-          {% endfor %}
+          {% set total = b.gates|length %}
+          {% set passed = b.gates|selectattr('pass')|list|length %}
+          {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
+          {{ passed }}/{{ total }}
+          {% if failed_keys %}
+            ({{ failed_keys[:2]|join(', ') }})
+          {% endif %}
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+<div class="mobile-only mobile-candidate-list">
+  {% for b in immediate_buy_rows %}
+  <div class="mobile-candidate-card">
+    {% set total = b.gates|length %}
+    {% set passed = b.gates|selectattr('pass')|list|length %}
+    {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
+    <div class="mobile-candidate-head">
+      <div class="mobile-candidate-rank">#{{ b.rank }}</div>
+      <div class="mobile-candidate-score">{{ "%.2f"|format(b.signal.score) }}</div>
+      <div class="mobile-candidate-symbol">{{ b.symbol }}</div>
+      <div class="mobile-candidate-entry">{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</div>
+    </div>
+    <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
+    <details>
+      <summary>상세 보기</summary>
+      <div class="small" style="margin-top:6px">{{ b.name }}</div>
+      <div class="small" style="margin-top:4px">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }} · RR {{ "%.2f"|format(b.entry_plan.rr) }}</div>
+    </details>
+  </div>
+  {% endfor %}
+</div>
 
 <h3 class="section-title">되돌림 대기 후보</h3>
-<div class="table-wrap">
+<div class="table-wrap desktop-only">
   <table>
     <thead>
       <tr>
@@ -227,15 +276,43 @@ function filterTable(){
         <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
         <td>{{ "%.2f"|format(b.entry_plan.rr) }}</td>
         <td>
-          {% for g in b.gates %}
-            <span class="badge">{{ g.key }}={{ "통과" if g.pass else "실패" }}</span>
-          {% endfor %}
+          {% set total = b.gates|length %}
+          {% set passed = b.gates|selectattr('pass')|list|length %}
+          {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
+          {{ passed }}/{{ total }}
+          {% if failed_keys %}
+            ({{ failed_keys[:2]|join(', ') }})
+          {% endif %}
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+<div class="mobile-only mobile-candidate-list">
+  {% for b in pullback_buy_rows %}
+  <div class="mobile-candidate-card">
+    {% set total = b.gates|length %}
+    {% set passed = b.gates|selectattr('pass')|list|length %}
+    {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
+    <div class="mobile-candidate-head">
+      <div class="mobile-candidate-rank">#{{ b.rank }}</div>
+      <div class="mobile-candidate-score">{{ "%.2f"|format(b.signal.score) }}</div>
+      <div class="mobile-candidate-symbol">{{ b.symbol }}</div>
+      <div class="mobile-candidate-entry">{{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</div>
+    </div>
+    <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
+    <details>
+      <summary>상세 보기</summary>
+      <div class="small" style="margin-top:6px">{{ b.name }}</div>
+      <div class="small" style="margin-top:4px">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }} · RR {{ "%.2f"|format(b.entry_plan.rr) }}</div>
+    </details>
+  </div>
+  {% endfor %}
+</div>
+
+<h3 class="section-title">관망 후보</h3>
+<div class="small">현재 관망 후보가 없습니다.</div>
 
 <h2 class="section-title">매도 후보 (리스크 관리)</h2>
 <div class="small">보유 포지션 기준으로만 산출.</div>

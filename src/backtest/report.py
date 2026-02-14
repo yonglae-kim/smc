@@ -23,6 +23,18 @@ details summary{cursor:pointer;color:#333}
 .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
 .detail-card{border:1px solid #eee;border-radius:10px;padding:10px;background:#fff}
 .tag{display:inline-block;padding:2px 6px;border-radius:999px;background:#f3f3f3;font-size:11px;margin-right:4px}
+.desktop-only{display:block}
+.mobile-only{display:none}
+.table-wrap{overflow-x:auto}
+.trade-mobile-list{display:grid;gap:10px}
+.trade-mobile-card{border:1px solid #eee;border-radius:10px;padding:10px;background:#fff}
+.trade-mobile-head{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center}
+.trade-mobile-symbol{font-size:16px;font-weight:700}
+.trade-mobile-pnl{font-size:16px;font-weight:700}
+@media(max-width:720px){
+  .desktop-only{display:none}
+  .mobile-only{display:block}
+}
 </style>
 </head>
 <body>
@@ -58,7 +70,8 @@ details summary{cursor:pointer;color:#333}
   <h2>거래 내역</h2>
   {% if early_exit_summary %}
   <h3>조기 EXIT별 평균 RR/PNL</h3>
-  <table>
+  <div class="table-wrap desktop-only">
+    <table>
     <thead>
       <tr>
         <th>조기 EXIT 사유</th>
@@ -77,10 +90,12 @@ details summary{cursor:pointer;color:#333}
       </tr>
     {% endfor %}
     </tbody>
-  </table>
+    </table>
+  </div>
   {% else %}
   <div class="small">조기 EXIT 기록이 없습니다.</div>
   {% endif %}
+  <div class="table-wrap desktop-only">
   <table>
     <thead>
       <tr>
@@ -143,6 +158,44 @@ details summary{cursor:pointer;color:#333}
     {% endfor %}
     </tbody>
   </table>
+  </div>
+  <div class="mobile-only trade-mobile-list">
+    {% for t in trades %}
+    <div class="trade-mobile-card">
+      <div class="trade-mobile-head">
+        <div class="trade-mobile-symbol">{{ t.symbol }}</div>
+        <div class="trade-mobile-pnl">{{ "%.0f"|format(t.pnl) }}</div>
+        <div class="small">{{ t.get("name", "") }}</div>
+        <div class="small">RR {{ "%.2f"|format(t.rr_realized) if t.rr_realized is not none else "-" }}</div>
+      </div>
+      <div class="small" style="margin-top:6px">{{ t.entry_date }} → {{ t.exit_date }} · {{ t.get("entry_type", "-") }}</div>
+      <details>
+        <summary>상세 보기</summary>
+        <div class="small" style="margin-top:6px">
+          진입 {{ "%.2f"|format(t.entry_px) }} · 청산 {{ "%.2f"|format(t.exit_px) }} · 보유 {{ t.get("hold_days", 0) }}일<br/>
+          SL 거리(ATR) {{ "%.2f"|format(t.stop_distance_atr) if t.stop_distance_atr is not none else "-" }} · MAE {{ "%.2f"|format(t.get("mae", 0.0)) }} · MFE {{ "%.2f"|format(t.get("mfe", 0.0)) }}<br/>
+          Symbol Regime {{ t.get("entry_structure_bias", "-") }} · 진입 점수 {{ "%.1f"|format(t.get('entry_score', 0)) }}
+        </div>
+        <div class="small" style="margin-top:8px">
+          <strong>청산 사유</strong>
+          {% if t.exit_reason_lines %}
+            <ul>{% for r in t.exit_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
+          {% else %}
+            <div>-</div>
+          {% endif %}
+        </div>
+        <div class="small" style="margin-top:8px">
+          <strong>진입 사유</strong>
+          {% if t.entry_reason_lines %}
+            <ul>{% for r in t.entry_reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
+          {% else %}
+            <div>-</div>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 
 <div class="card">
