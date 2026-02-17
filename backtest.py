@@ -1,15 +1,16 @@
 import argparse, os
 import json
 from src.config import load_config
-from src.utils.http import HttpClient
-from src.providers.naver import NaverChartProvider, NaverMarketSumFetcher
-from src.storage.fs import FSStorage
+from src.bootstrap.container import (
+    build_http_client,
+    build_market_provider,
+    build_storage,
+    build_universe_builder,
+)
 from src.backtest.data import BacktestDataLoader
 from src.backtest.engine import run_backtest
 from src.backtest.metrics import compute_metrics
 from src.backtest.report import render_backtest_report
-from src.universe.builder import UniverseBuilder
-from src.utils.time import today_kst
 from src.utils.progress import Progress
 from src.strategy.soft_score import SoftScoreStrategy
 
@@ -19,28 +20,15 @@ def main():
     args = ap.parse_args()
     cfg = load_config(args.config)
 
-    cache_mode = cfg.network.cache_mode
-    snapshot_id = cfg.network.cache_snapshot_id or today_kst().strftime("%Y-%m-%d")
-    cache_dir = os.path.join(cfg.app.cache_dir, "http", snapshot_id if cache_mode == "snapshot" else "latest")
-    from src.utils.http_cache import HttpCache
-    http_cache = HttpCache(cache_dir, ttl_sec=cfg.network.cache_ttl_sec, mode=cache_mode)
-    http = HttpClient(
-        timeout_sec=cfg.network.timeout_sec,
-        max_retries=cfg.network.max_retries,
-        backoff_base_sec=cfg.network.backoff_base_sec,
-        jitter_sec=cfg.network.jitter_sec,
-        rate_limit_per_sec=cfg.network.rate_limit_per_sec,
-        cache=http_cache,
-    )
-    storage = FSStorage(cfg.app.cache_dir)
-    provider = NaverChartProvider(http)
-    fetcher = NaverMarketSumFetcher(http)
+    http = build_http_client(cfg)
+    storage = build_storage(cfg)
+    provider, fetcher = build_market_provider(cfg, http)
     loader = BacktestDataLoader(storage, provider, max_fetch_count=int(cfg.backtest.max_fetch_count))
 
     # universe for backtest
     # TOP500 (liquidity) uses current universe builder; for historical studies you can pin symbols list in config.backtest.symbols
     if cfg.backtest.symbols == "TOP500":
-        ub = UniverseBuilder(storage, provider, fetcher, cfg.universe)
+        ub = build_universe_builder(cfg, storage, provider, fetcher)
         universe, _ = ub.build()
     else:
         all_syms = fetcher.fetch_all_symbols()

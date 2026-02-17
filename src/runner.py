@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 
-from .application.daily_pipeline import DailyPipelineService
+from .bootstrap.container import build_daily_pipeline_service
 
 
 def run(config_path: str) -> None:
-    DailyPipelineService(config_path).run()
+    build_daily_pipeline_service(config_path).run()
 
 
 def main() -> None:
