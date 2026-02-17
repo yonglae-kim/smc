@@ -14,7 +14,7 @@ network:
 universe:
   ohlcv_lookback_days: 250
   liquidity_window: 20
-  top_liquidity: 500
+  top_liquidity: 0
   daily_recalc_top: 800
   weekly_full_scan_weekday: 0
   include_daily_value_rank_addon: 200

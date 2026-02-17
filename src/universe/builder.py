@@ -26,7 +26,7 @@ class UniverseBuilder:
         return float(np.median(x.values))
 
     def build(self) -> Tuple[List[Dict], Dict]:
-        """Returns (universe_top500, meta). Implements incremental policy:
+        """Returns (selected_universe, meta). Implements incremental policy:
         - Daily: recalc liquidity for previous top `daily_recalc_top` + addon set from today's traded value.
         - Weekly: full scan + rebuild.
         - Resume: keep a progress file for the liquidity scan.
@@ -37,12 +37,13 @@ class UniverseBuilder:
         last_universe = self.storage.load_json("state/last_universe.json", default=None)
         weekday = today.weekday()
 
-        full_scan = (last_universe is None) or (weekday == int(self.cfg.weekly_full_scan_weekday))
+        select_all = int(self.cfg.top_liquidity) <= 0
+        full_scan = select_all or (last_universe is None) or (weekday == int(self.cfg.weekly_full_scan_weekday))
         symbols_all = None
         if full_scan:
             symbols_all = self.fetcher.fetch_all_symbols()
             candidates = symbols_all
-            scan_label = "FULL"
+            scan_label = "FULL_ALL" if select_all else "FULL"
         else:
             prev = last_universe.get("universe_ranked", [])
             prev_top = prev[: int(self.cfg.daily_recalc_top)]
@@ -134,7 +135,8 @@ class UniverseBuilder:
         # finalize
         ranked = sorted(results.items(), key=lambda kv: kv[1]["liquidity"], reverse=True)
         ranked_rows = [{"symbol": s, **meta} for s, meta in ranked]
-        top500 = ranked_rows[: int(self.cfg.top_liquidity)]
+        target_n = int(self.cfg.top_liquidity)
+        selected_universe = ranked_rows if target_n <= 0 else ranked_rows[:target_n]
 
         meta = {
             "asof": ymd,
@@ -147,4 +149,4 @@ class UniverseBuilder:
         }
         self.storage.save_json("state/last_universe.json", meta)
         self.storage.save_json("state/universe_progress.json", {"key": progress_key, "done": [], "results": {}})
-        return top500, meta
+        return selected_universe, meta
