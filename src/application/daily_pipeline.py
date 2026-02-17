@@ -279,7 +279,10 @@ class DailyPipelineService:
             signal_rows.append({"ctx": ctx, "signal": signal, "entry_plan": entry_plan})
 
         self.storage.save_json(f"snapshots/{self.ymd}/universe.json", uni_meta)
-        self.storage.save_json(f"snapshots/{self.ymd}/candidates.json", rows_sorted)
+        self.storage.save_json(
+            f"snapshots/{self.ymd}/candidates.json",
+            [row.model_dump() if hasattr(row, "model_dump") else row for row in rows_sorted],
+        )
         self.storage.save_json(
             f"snapshots/{self.ymd}/signals.json",
             [
@@ -457,7 +460,7 @@ class DailyPipelineService:
         detail_n = int(self.cfg.scoring.top_detail)
         buy_details = []
         for row in buy_candidates[:detail_n]:
-            c = dict(row["ctx"])
+            c = row["ctx"].model_dump() if hasattr(row["ctx"], "model_dump") else dict(row["ctx"])
             c["signal"] = row["signal"].to_dict()
             df = self.storage.load_ohlcv_cache(c["symbol"])
             df = df.sort_values("date").reset_index(drop=True)
