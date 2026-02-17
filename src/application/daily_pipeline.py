@@ -195,6 +195,49 @@ class DailyPipelineService:
         buy_candidates = [signal_map[s[0].symbol] for s in selected]
         immediate_buys = [row for row in buy_candidates if row["entry_plan"].entry_type == "next_open"]
         pullback_buys = [row for row in buy_candidates if row["entry_plan"].entry_type != "next_open"]
+
+        def _compute_pullback_fill_likelihood(ctx: Dict[str, Any], entry_plan: EntryPlan) -> float:
+            def _clamp01(value: float) -> float:
+                return max(0.0, min(1.0, value))
+
+            close_px = float(ctx.get("close", 0.0) or 0.0)
+            entry_price = float(getattr(entry_plan, "entry_price", 0.0) or 0.0)
+            atr14 = float(ctx.get("atr14", 0.0) or 0.0)
+            atr_safe = atr14 if atr14 > 1e-9 else max(abs(close_px), 1.0) * 0.02
+
+            distance_atr = abs(close_px - entry_price) / atr_safe
+            distance_score = _clamp01(1.0 - distance_atr / 1.5)
+
+            dist_to_ob_atr = ctx.get("dist_to_ob_atr")
+            ob_score = _clamp01(1.0 - float(dist_to_ob_atr) / 1.5) if dist_to_ob_atr is not None else 0.5
+
+            dist_to_fvg_atr = ctx.get("dist_to_fvg_atr")
+            fvg_score = _clamp01(1.0 - float(dist_to_fvg_atr) / 1.5) if dist_to_fvg_atr is not None else 0.5
+
+            atr_ratio = ctx.get("atr_ratio")
+            atr_ratio_score = 0.5
+            if atr_ratio is not None:
+                atr_ratio = float(atr_ratio)
+                atr_ratio_score = _clamp01(1.0 - abs(atr_ratio - 1.1) / 0.8)
+
+            entry_type_bonus = {
+                "limit_in_zone": 1.0,
+                "limit_pullback": 0.8,
+                "reclaim": 0.6,
+            }.get(entry_plan.entry_type, 0.4)
+
+            score = (
+                0.35 * distance_score
+                + 0.20 * ob_score
+                + 0.15 * fvg_score
+                + 0.15 * atr_ratio_score
+                + 0.15 * entry_type_bonus
+            )
+            return _clamp01(score)
+
+        for row in pullback_buys:
+            row["fill_likelihood"] = _compute_pullback_fill_likelihood(row["ctx"], row["entry_plan"])
+        pullback_buys.sort(key=lambda r: (-r["fill_likelihood"], -r["signal"].score, r["signal"].symbol))
         buy_valid_from = self.trade_rules.next_trading_day(cal, self.ymd) if cal else self.ymd
 
         def build_buy_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -207,6 +250,7 @@ class DailyPipelineService:
                         "name": row["ctx"].get("name", ""),
                         "signal": row["signal"],
                         "entry_plan": row["entry_plan"],
+                        "fill_likelihood": row.get("fill_likelihood"),
                         "gates": [{"key": k, "pass": v} for k, v in row["signal"].gates.items()],
                     }
                 )
