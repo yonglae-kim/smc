@@ -7,18 +7,20 @@ from typing import Any, Dict, List, Tuple
 import pandas as pd
 
 from ..analysis.indicators import atr, rsi, sma
+from ..bootstrap.container import (
+    build_http_client,
+    build_market_provider,
+    build_storage,
+    build_universe_builder,
+)
 from ..config import load_config
 from ..engine import analyze_symbol
-from ..providers.naver import NaverChartProvider, NaverMarketSumFetcher
 from ..reporting.charts import plot_symbol_chart
 from ..reporting.html import render_report
 from ..scoring import score_candidate
-from ..storage.fs import FSStorage
 from ..strategy.soft_score import SoftScoreStrategy
 from ..trading.models import EntryPlan, Position, TradeSignal
 from ..trading.rules import TradeRules
-from ..universe.builder import UniverseBuilder
-from ..utils.http import HttpClient
 from ..utils.progress import Progress
 from ..utils.time import now_kst_iso, today_kst
 from .state_keys import POSITIONS_LIVE_KEY, analysis_progress_key
@@ -34,27 +36,9 @@ class DailyPipelineService:
         strategy = SoftScoreStrategy(self.cfg)
         self.trade_rules = TradeRules(self.cfg, strategy=strategy)
 
-        cache_mode = self.cfg.network.cache_mode
-        snapshot_id = self.cfg.network.cache_snapshot_id or self.ymd
-        cache_dir = os.path.join(
-            self.cfg.app.cache_dir,
-            "http",
-            snapshot_id if cache_mode == "snapshot" else "latest",
-        )
-        from ..utils.http_cache import HttpCache
-
-        http_cache = HttpCache(cache_dir, ttl_sec=self.cfg.network.cache_ttl_sec, mode=cache_mode)
-        http = HttpClient(
-            timeout_sec=self.cfg.network.timeout_sec,
-            max_retries=self.cfg.network.max_retries,
-            backoff_base_sec=self.cfg.network.backoff_base_sec,
-            jitter_sec=self.cfg.network.jitter_sec,
-            rate_limit_per_sec=self.cfg.network.rate_limit_per_sec,
-            cache=http_cache,
-        )
-        self.storage = FSStorage(self.cfg.app.cache_dir)
-        self.provider = NaverChartProvider(http)
-        self.fetcher = NaverMarketSumFetcher(http)
+        http = build_http_client(self.cfg)
+        self.storage = build_storage(self.cfg)
+        self.provider, self.fetcher = build_market_provider(self.cfg, http)
 
         self.ctx_map: Dict[str, Dict[str, Any]] = {}
         self.cal_dates = set()
@@ -66,7 +50,7 @@ class DailyPipelineService:
             else f"Top{self.cfg.universe.top_liquidity}"
         )
         print(f"[Runner] Universe build: {universe_label} (incremental/weekly policy)", flush=True)
-        ub = UniverseBuilder(self.storage, self.provider, self.fetcher, self.cfg.universe)
+        ub = build_universe_builder(self.cfg, self.storage, self.provider, self.fetcher)
         universe, uni_meta = ub.build()
         return universe, uni_meta, universe_label
 
