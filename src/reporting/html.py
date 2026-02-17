@@ -710,7 +710,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   </table>
 </div>
 
-<h2 class="section-title">Top500 요약</h2>
+<h2 class="section-title">유니버스 요약</h2>
 {% if include_js %}
 <div class="toolbar">
   <div class="toolbar-row">
@@ -778,7 +778,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     </tbody>
   </table>
 </div>
-<button class="more-btn" type="button" data-more-button="table-row">Top500 더 보기</button>
+<button class="more-btn" type="button" data-more-button="table-row">더 보기</button>
 <div id="sortModal" class="sort-modal" onclick="if(event.target===this) closeSortSheet()">
   <div class="sort-sheet">
     <div style="font-weight:700">정렬 기준</div>

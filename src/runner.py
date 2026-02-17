@@ -43,15 +43,16 @@ def run(config_path: str) -> None:
     storage = FSStorage(cfg.app.cache_dir)
     provider = NaverChartProvider(http)
     fetcher = NaverMarketSumFetcher(http)
+    universe_label = "전체 종목" if int(cfg.universe.top_liquidity) <= 0 else f"Top{cfg.universe.top_liquidity}"
 
     print("[Runner] Start daily pipeline", flush=True)
-    print(f"[Runner] Universe build: Top{cfg.universe.top_liquidity} (incremental/weekly policy)", flush=True)
+    print(f"[Runner] Universe build: {universe_label} (incremental/weekly policy)", flush=True)
 
     # --- universe ---
     ub = UniverseBuilder(storage, provider, fetcher, cfg.universe)
     universe, uni_meta = ub.build()
 
-    print("[Runner] Per-symbol analysis (Top500)", flush=True)
+    print(f"[Runner] Per-symbol analysis ({universe_label})", flush=True)
 
     # --- per-symbol analysis (resume capable) ---
     out_dir = storage.out_dir(cfg.app.out_dir, ymd)
@@ -135,7 +136,7 @@ def run(config_path: str) -> None:
 
     cal = sorted(cal_dates)
 
-    # Rank (candidates are still within top500 universe)
+    # Rank (candidates are still within selected universe)
     rows_sorted = sorted(rows, key=lambda x: (-x.get("score", 0), x.get("symbol", "")))
 
     signal_rows = []

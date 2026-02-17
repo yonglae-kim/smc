@@ -21,7 +21,7 @@ class NetworkCfg(BaseModel):
 class UniverseCfg(BaseModel):
     ohlcv_lookback_days: int = 250
     liquidity_window: int = 20
-    top_liquidity: int = 500
+    top_liquidity: int = 0  # <=0 means all symbols
     daily_recalc_top: int = 800
     weekly_full_scan_weekday: int = 0
     include_daily_value_rank_addon: int = 200

@@ -1,5 +1,5 @@
 # kquant_smc_reporter
-Daily (19:00 KST) batch analyzer for KOSPI+KOSDAQ (Top500 liquidity), generating **candidates + context** (no buy/sell signals) and a single-file HTML report with embedded candlestick charts.
+Daily (19:00 KST) batch analyzer for KOSPI+KOSDAQ (전체 유동성 랭킹), generating **candidates + context** (no buy/sell signals) and a single-file HTML report with embedded candlestick charts.
 
 ## Quickstart
 ```bash
