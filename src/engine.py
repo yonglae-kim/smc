@@ -11,8 +11,9 @@ from .analysis.smc.ob import detect_ob_from_bos
 from .regime.regime import compute_regime, relative_strength
 from .signals.ma_slope_gate import compute_ma_slope_metrics, normalize_ma_slope_gate_config
 from .scoring import score_candidate
+from .trading.models import AnalysisContext
 
-def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optional[Dict[str,Any]]:
+def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optional[AnalysisContext]:
     """Compute features + SMC context. Returns context dict suitable for scoring/report."""
     if df is None or len(df) < 60:
         return None
@@ -152,67 +153,79 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
     recent_ma20 = df["ma20"].tail(recent_tail).tolist() if recent_tail > 0 else []
     recent_ma20_slope_atr = df["ma20_slope_atr"].tail(recent_tail).tolist() if recent_tail > 0 else []
 
-    ctx = {
-        "symbol": symbol_meta["symbol"],
-        "name": symbol_meta.get("name",""),
-        "market": symbol_meta.get("market",""),
-        "asof": str(last["date"].date()),
-        "close": close,
-        "atr14": atr_last,
-        "atr50": atr50_last,
-        "atr_ratio": atr_ratio,
-        "ma20": ma20,
-        "ma200": ma200,
-        "ma_slope_fast": ma_slope_fast,
-        "ma_slope_slow": ma_slope_slow,
-        "ma_slope_pct": ma_slope_pct,
-        "ma_slope_window": int(ma_gate_cfg["slope_window"]),
-        "above_ma200": above_ma200,
-        "above_ma20": above_ma20,
-        "ma20_above_ma200": ma20_above_ma200,
-        "rsi14": rsi_last,
-        "macd_line": macd_line_last,
-        "macd_signal": macd_signal_last,
-        "macd_hist": macd_hist_last,
-        "volume": volume_last,
-        "volume_sma20": vol_sma20_last,
-        "volume_ratio": volume_ratio,
-        "momentum_20": momentum_20,
-        "momentum_60": momentum_60,
-        "vol_adj_return_20": vol_adj_return_20,
-        "ma20_slope_atr": ma20_slope_atr,
-        "room_to_high_atr": room_to_high_atr,
-        "recent_high_20": recent_high_20,
-        "recent_rsi14": recent_rsi14,
-        "recent_macd_hist": recent_macd_hist,
-        "recent_close": recent_close,
-        "recent_ma20": recent_ma20,
-        "recent_ma20_slope_atr": recent_ma20_slope_atr,
-        "structure_bias": bias,
-        "bos": bos,
-        "ob": None if ob is None else {
-            "kind": ob.kind, "date": ob.date, "lower": ob.lower, "upper": ob.upper,
-            "invalidation": ob.invalidation, "status": ob.status, "quality": ob.quality, "age": ob.age
+    ctx = AnalysisContext(
+        symbol=symbol_meta["symbol"],
+        name=symbol_meta.get("name", ""),
+        market=symbol_meta.get("market", ""),
+        asof=str(last["date"].date()),
+        close=close,
+        atr14=atr_last,
+        atr50=atr50_last,
+        atr_ratio=atr_ratio,
+        ma20=ma20,
+        ma200=ma200,
+        ma_slope_fast=ma_slope_fast,
+        ma_slope_slow=ma_slope_slow,
+        ma_slope_pct=ma_slope_pct,
+        ma_slope_window=int(ma_gate_cfg["slope_window"]),
+        above_ma200=above_ma200,
+        above_ma20=above_ma20,
+        ma20_above_ma200=ma20_above_ma200,
+        rsi14=rsi_last,
+        macd_line=macd_line_last,
+        macd_signal=macd_signal_last,
+        macd_hist=macd_hist_last,
+        volume=volume_last,
+        volume_sma20=vol_sma20_last,
+        volume_ratio=volume_ratio,
+        momentum_20=momentum_20,
+        momentum_60=momentum_60,
+        vol_adj_return_20=vol_adj_return_20,
+        ma20_slope_atr=ma20_slope_atr,
+        room_to_high_atr=room_to_high_atr,
+        recent_high_20=recent_high_20,
+        recent_rsi14=recent_rsi14,
+        recent_macd_hist=recent_macd_hist,
+        recent_close=recent_close,
+        recent_ma20=recent_ma20,
+        recent_ma20_slope_atr=recent_ma20_slope_atr,
+        structure_bias=bias,
+        bos=bos,
+        ob=None if ob is None else {
+            "kind": ob.kind,
+            "date": ob.date,
+            "lower": ob.lower,
+            "upper": ob.upper,
+            "invalidation": ob.invalidation,
+            "status": ob.status,
+            "quality": ob.quality,
+            "age": ob.age,
         },
-        "ob_quality": ob_quality,
-        "ob_age": ob_age,
-        "fvg": None if fvg_pick is None else {
-            "kind": fvg_pick.kind, "created_date": fvg_pick.created_date, "lower": fvg_pick.lower,
-            "upper": fvg_pick.upper, "status": fvg_pick.status, "fill_ratio": fvg_pick.fill_ratio, "age": fvg_pick.age
+        ob_quality=ob_quality,
+        ob_age=ob_age,
+        fvg=None if fvg_pick is None else {
+            "kind": fvg_pick.kind,
+            "created_date": fvg_pick.created_date,
+            "lower": fvg_pick.lower,
+            "upper": fvg_pick.upper,
+            "status": fvg_pick.status,
+            "fill_ratio": fvg_pick.fill_ratio,
+            "age": fvg_pick.age,
         },
-        "fvg_active": fvg_pick is not None,
-        "fvg_age": fvg_age,
-        "dist_to_ob_atr": dist_to_ob,
-        "dist_to_fvg_atr": dist_to_fvg,
-        "tag_confluence_ob_fvg": confluence,
-        "tags": ["Confluence_OB_FVG"] if confluence else [],
-        "rs": rs,
-        "symbol_regime": symbol_regime,
-        "pivots": [{"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength} for p in piv[-40:]],
-        "structure_points": struct_pts[-20:],
-        "notes": [
-            f"Fractal pivot confirmation lag: last {cfg.analysis.fractal_n} bars are unconfirmed for pivots."
-        ]
-    }
+        fvg_active=fvg_pick is not None,
+        fvg_age=fvg_age,
+        dist_to_ob_atr=dist_to_ob,
+        dist_to_fvg_atr=dist_to_fvg,
+        tag_confluence_ob_fvg=confluence,
+        tags=["Confluence_OB_FVG"] if confluence else [],
+        rs=rs,
+        symbol_regime=symbol_regime,
+        pivots=[
+            {"idx": p.idx, "date": str(p.date.date()), "kind": p.kind, "price": p.price, "strength": p.strength}
+            for p in piv[-40:]
+        ],
+        structure_points=struct_pts[-20:],
+        notes=[f"Fractal pivot confirmation lag: last {cfg.analysis.fractal_n} bars are unconfirmed for pivots."],
+    )
     # scoring is done by the caller
     return ctx

@@ -7,7 +7,7 @@ import pandas as pd
 from ..engine import analyze_symbol
 from ..scoring import score_candidate
 from ..strategy.base import Strategy
-from ..trading.models import Position
+from ..trading.models import AnalysisContext, Position, ScoredContext
 from ..trading.rules import TradeRules
 from ..utils.progress import Progress
 
@@ -16,19 +16,12 @@ def _apply_cost(px: float, fee_bps: float, slippage_bps: float) -> float:
     return px * (1.0 + (fee_bps + slippage_bps) / 10000.0)
 
 
-def _normalize_strategy_context(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    tags = ctx.get("tags")
-    if tags is None:
-        tags = []
-    elif not isinstance(tags, list):
-        tags = list(tags)
-
-    confluence = ctx.get("tag_confluence_ob_fvg")
-    if confluence is None:
-        confluence = "Confluence_OB_FVG" in set(tags)
-    ctx["tag_confluence_ob_fvg"] = bool(confluence)
-    ctx["tags"] = tags
-    return ctx
+def _normalize_strategy_context(ctx: AnalysisContext | Dict[str, Any]) -> AnalysisContext:
+    if not isinstance(ctx, AnalysisContext):
+        ctx = AnalysisContext.model_validate(ctx)
+    tags = ctx.tags if isinstance(ctx.tags, list) else list(ctx.tags or [])
+    confluence = ctx.tag_confluence_ob_fvg or ("Confluence_OB_FVG" in set(tags))
+    return ctx.model_copy(update={"tags": tags, "tag_confluence_ob_fvg": bool(confluence)})
 
 
 def run_backtest(
@@ -127,7 +120,7 @@ def run_backtest(
                     if ctx:
                         ctx = _normalize_strategy_context(ctx)
                         ctx = score_candidate(ctx, cfg.scoring.weights)
-                        ctx["soft_score"] = trade_rules.strategy.evaluate(ctx)["score"]
+                        ctx.soft_score = trade_rules.strategy.evaluate(ctx)["score"]
                         trade_rules.update_trailing_stop(pos, ctx)
 
             stop_grace_active = stop_grace_days > 0 and pos.hold_days < stop_grace_days
@@ -257,7 +250,7 @@ def run_backtest(
                 ctx = _normalize_strategy_context(ctx)
                 ctx = score_candidate(ctx, cfg.scoring.weights)
 
-                signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.get("close", 0.0)))
+                signal, entry_plan = trade_rules.build_signal(date_str, ctx, cal, entry_price=float(ctx.close))
                 if not trade_rules.signal_passes(signal):
                     stats["strategy_exclude"] += 1
                 day_candidates.append((float(signal.score), sym, ctx, df_full, signal, entry_plan, meta.get("name", "")))

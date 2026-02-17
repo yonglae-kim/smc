@@ -6,7 +6,7 @@ import math
 
 import pandas as pd
 
-from .models import EntryPlan, ExitDecision, Position, TradeSignal
+from .models import AnalysisContext, EntryPlan, ExitDecision, Position, ScoredContext, TradeSignal
 from ..signals.ma_slope_gate import evaluate_ma_slope_gate_from_values, normalize_ma_slope_gate_config
 from ..strategy.soft_score import SoftScoreStrategy
 
@@ -68,6 +68,15 @@ class TradeRules:
         self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(strategy_params.get("ma_slope_gate"))
         self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
 
+
+    @staticmethod
+    def _as_ctx(ctx: AnalysisContext | Dict[str, Any]) -> AnalysisContext:
+        if isinstance(ctx, AnalysisContext):
+            return ctx
+        if "score" in ctx or "score_components" in ctx or "soft_score" in ctx:
+            return ScoredContext.model_validate(ctx)
+        return AnalysisContext.model_validate(ctx)
+
     def next_trading_day(self, calendar: Iterable[pd.Timestamp], date: str) -> str:
         if not calendar:
             return date
@@ -78,14 +87,15 @@ class TradeRules:
                 return str(c.date())
         return str(cal[-1].date())
 
-    def _entry_suggestion(self, ctx: Dict[str, Any]) -> Tuple[str, float, List[str]]:
-        close_px = float(ctx.get("close", 0.0))
+    def _entry_suggestion(self, ctx: AnalysisContext | Dict[str, Any]) -> Tuple[str, float, List[str]]:
+        ctx = self._as_ctx(ctx)
+        close_px = float(ctx.close)
         rationale = []
-        ob = ctx.get("ob") or {}
-        fvg = ctx.get("fvg") or {}
+        ob = ctx.ob
+        fvg = ctx.fvg
         if ob:
-            lower = float(ob.get("lower", close_px))
-            upper = float(ob.get("upper", close_px))
+            lower = float(ob.lower)
+            upper = float(ob.upper)
             mid = (lower + upper) / 2.0
             if close_px > upper:
                 rationale.append("가격이 OB 상단 위에 있어, OB 상단 부근 되돌림 지정가로 접근.")
@@ -96,8 +106,8 @@ class TradeRules:
             rationale.append("가격이 OB 하단 아래라, OB 리클레임 확인 후 진입 권장.")
             return "reclaim", lower, rationale
         if fvg:
-            lower = float(fvg.get("lower", close_px))
-            upper = float(fvg.get("upper", close_px))
+            lower = float(fvg.lower)
+            upper = float(fvg.upper)
             mid = (lower + upper) / 2.0
             if close_px > upper:
                 rationale.append("가격이 FVG 상단 위에 있어, FVG 상단 되돌림 지정가로 접근.")
@@ -110,12 +120,13 @@ class TradeRules:
         rationale.append("명확한 구간이 없어 다음 시가 진입 전략 적용.")
         return "next_open", close_px, rationale
 
-    def build_entry_plan(self, ctx: Dict[str, Any], entry_price: float) -> EntryPlan:
+    def build_entry_plan(self, ctx: AnalysisContext | Dict[str, Any], entry_price: float) -> EntryPlan:
+        ctx = self._as_ctx(ctx)
         entry_type, suggested_price, rationale = self._entry_suggestion(ctx)
         entry_px = entry_price if entry_type == "next_open" else suggested_price
-        atr = _safe_float(ctx.get("atr14"), entry_px * 0.02)
-        ob = ctx.get("ob") or {}
-        stop_loss = _safe_float(ob.get("invalidation"), entry_px - atr * self.stop_atr_mult)
+        atr = _safe_float(ctx.atr14, entry_px * 0.02)
+        ob = ctx.ob
+        stop_loss = _safe_float(ob.invalidation if ob else None, entry_px - atr * self.stop_atr_mult)
         if not math.isfinite(stop_loss):
             stop_loss = entry_px - atr * self.stop_atr_mult
         if not math.isfinite(stop_loss) or stop_loss >= entry_px:
@@ -129,12 +140,12 @@ class TradeRules:
         if atr > 0:
             stop_distance_atr = (entry_px - stop_loss) / atr
             if math.isfinite(stop_distance_atr):
-                ctx["stop_distance_atr"] = float(stop_distance_atr)
+                ctx.stop_distance_atr = float(stop_distance_atr)
         rr_target = float(self.rr_target)
-        atr_ratio = ctx.get("atr_ratio")
-        room_to_high_atr = ctx.get("room_to_high_atr")
-        momentum_20 = ctx.get("momentum_20")
-        momentum_60 = ctx.get("momentum_60")
+        atr_ratio = ctx.atr_ratio
+        room_to_high_atr = ctx.room_to_high_atr
+        momentum_20 = ctx.momentum_20
+        momentum_60 = ctx.momentum_60
         if atr_ratio is not None and math.isfinite(float(atr_ratio)):
             if atr_ratio >= 1.4:
                 rr_target += 0.25
@@ -181,7 +192,8 @@ class TradeRules:
             invalidation=invalidation,
         )
 
-    def build_signal(self, date: str, ctx: Dict[str, Any], calendar: Iterable[pd.Timestamp], entry_price: float) -> Tuple[TradeSignal, EntryPlan]:
+    def build_signal(self, date: str, ctx: AnalysisContext | Dict[str, Any], calendar: Iterable[pd.Timestamp], entry_price: float) -> Tuple[TradeSignal, EntryPlan]:
+        ctx = self._as_ctx(ctx)
         eval_result = self.strategy.evaluate(ctx)
         entry_plan = self.build_entry_plan(ctx, entry_price)
         score = float(eval_result["score"])
@@ -194,7 +206,7 @@ class TradeRules:
         gate_reasons = list(eval_result.get("gate_reasons", []))
         if structure_score < 0:
             gate_reasons.append("구조 점수 음수: 최소 점수 상향")
-        ob_quality = ctx.get("ob_quality")
+        ob_quality = ctx.ob_quality
         if ob_quality is not None and ob_quality < self.ob_quality_gate_min:
             min_score += self.ob_quality_gate_penalty
             gate_reasons.append(
@@ -205,8 +217,8 @@ class TradeRules:
             if not gates["ob_quality"]:
                 gate_reasons.append("OB 품질 게이트 실패")
         for age_label, age_value, age_max in (
-            ("OB", ctx.get("ob_age"), self.ob_age_gate_max),
-            ("FVG", ctx.get("fvg_age"), self.fvg_age_gate_max),
+            ("OB", ctx.ob_age, self.ob_age_gate_max),
+            ("FVG", ctx.fvg_age, self.fvg_age_gate_max),
         ):
             if age_value is None or age_max <= 0:
                 continue
@@ -228,7 +240,7 @@ class TradeRules:
         signal = TradeSignal(
             timestamp=date,
             valid_from=valid_from,
-            symbol=ctx.get("symbol", ""),
+            symbol=ctx.symbol,
             direction="BUY",
             score=score,
             confidence=float(confidence),
@@ -243,7 +255,8 @@ class TradeRules:
     def signal_passes(self, signal: TradeSignal) -> bool:
         return all(signal.gates.values()) if signal.gates else False
 
-    def build_entry_reasons(self, ctx: Dict[str, Any], signal: TradeSignal, entry_plan: EntryPlan) -> List[str]:
+    def build_entry_reasons(self, ctx: AnalysisContext | Dict[str, Any], signal: TradeSignal, entry_plan: EntryPlan) -> List[str]:
+        ctx = self._as_ctx(ctx)
         eval_result = {"gate_reasons": signal.gate_reasons}
         return self._build_buy_reasons(ctx, eval_result, entry_plan, self.signal_passes(signal))
 
@@ -265,8 +278,9 @@ class TradeRules:
         entry_date: str,
         entry_price: float,
         size: float,
-        ctx: Dict[str, Any],
+        ctx: AnalysisContext | Dict[str, Any],
     ) -> Position:
+        ctx = self._as_ctx(ctx)
         stop_loss = entry_plan.stop_loss
         if stop_loss >= entry_price:
             stop_loss = entry_price * (1 - self.min_risk_ratio)
@@ -287,14 +301,14 @@ class TradeRules:
             risk_per_share = max(1e-6, entry_price - entry_plan.stop_loss)
             tp1_price = entry_price + self.partial_rr * risk_per_share
             tp1_size = size * self.partial_size
-        atr = _safe_float(ctx.get("atr14"), 0.0)
+        atr = _safe_float(ctx.atr14, 0.0)
         stop_distance_atr = None
         if atr > 0:
             stop_distance_atr = (entry_price - stop_loss) / atr
         return Position(
             symbol=signal.symbol,
-            name=ctx.get("name", ""),
-            market=ctx.get("market", ""),
+            name=ctx.name,
+            market=ctx.market,
             entry_time=entry_date,
             entry_price=entry_price,
             size=size,
@@ -308,33 +322,34 @@ class TradeRules:
             entry_breakdown=signal.score_breakdown,
             entry_stop_loss=stop_loss,
             entry_atr=atr if atr > 0 else None,
-            entry_structure_bias=ctx.get("structure_bias"),
+            entry_structure_bias=ctx.structure_bias,
             stop_distance_atr=stop_distance_atr,
             tp1_price=tp1_price,
             tp1_size=tp1_size,
         )
 
-    def update_trailing_stop(self, position: Position, ctx: Dict[str, Any]) -> None:
+    def update_trailing_stop(self, position: Position, ctx: AnalysisContext | Dict[str, Any]) -> None:
+        ctx = self._as_ctx(ctx)
         if position.trail is None:
             return
-        atr = _safe_float(ctx.get("atr14"), 0.0)
+        atr = _safe_float(ctx.atr14, 0.0)
         if atr <= 0:
             return
-        close_px = _safe_float(ctx.get("close"), 0.0)
+        close_px = _safe_float(ctx.close, 0.0)
         new_stop = close_px - atr * position.trail
         if new_stop > position.stop_loss:
             position.stop_loss = new_stop
 
-    def apply_tp1_risk_reduction(self, position: Position, ctx: Optional[Dict[str, Any]]) -> None:
+    def apply_tp1_risk_reduction(self, position: Position, ctx: Optional[AnalysisContext]) -> None:
         if not self.tp1_risk_reduction_enabled:
             return
-        ctx = ctx or {}
-        atr = _safe_float(ctx.get("atr14"), position.entry_atr or 0.0)
+        ctx = ctx or AnalysisContext(symbol=position.symbol, close=position.entry_price)
+        atr = _safe_float(ctx.atr14, position.entry_atr or 0.0)
         stop_candidates = [position.stop_loss]
         if atr > 0 and self.tp1_stop_atr_buffer > 0:
             stop_candidates.append(position.entry_price + self.tp1_stop_atr_buffer * atr)
         if atr > 0 and self.tp1_trail_atr_mult > 0:
-            close_px = _safe_float(ctx.get("close"), 0.0)
+            close_px = _safe_float(ctx.close, 0.0)
             if close_px > 0:
                 stop_candidates.append(close_px - atr * self.tp1_trail_atr_mult)
         new_stop = max(stop_candidates)
@@ -345,13 +360,14 @@ class TradeRules:
         ):
             position.trail = self.tp1_trail_atr_mult
 
-    def _extract_recent_series(self, ctx: Dict[str, Any], recent_key: str, fallback_key: str) -> List[float]:
-        series = ctx.get(recent_key)
+    def _extract_recent_series(self, ctx: AnalysisContext | Dict[str, Any], recent_key: str, fallback_key: str) -> List[float]:
+        ctx = self._as_ctx(ctx)
+        series = getattr(ctx, recent_key, None)
         values: List[float] = []
         if isinstance(series, list):
             values = [float(v) for v in series if v is not None and math.isfinite(float(v))]
         else:
-            val = ctx.get(fallback_key)
+            val = getattr(ctx, fallback_key, None)
             if val is not None:
                 try:
                     val_f = float(val)
@@ -361,7 +377,8 @@ class TradeRules:
                     values = []
         return values
 
-    def _has_consecutive_weakness(self, ctx: Dict[str, Any]) -> Tuple[bool, str]:
+    def _has_consecutive_weakness(self, ctx: AnalysisContext | Dict[str, Any]) -> Tuple[bool, str]:
+        ctx = self._as_ctx(ctx)
         days = max(0, self.early_exit_rsi_macd_days)
         if days <= 0:
             return False, ""
@@ -381,7 +398,7 @@ class TradeRules:
         self,
         position: Position,
         bar: Dict[str, float],
-        ctx: Optional[Dict[str, Any]],
+        ctx: Optional[AnalysisContext],
         date: str,
         eval_ctx: Optional[Dict[str, Any]] = None,
     ) -> List[ExitDecision]:
@@ -454,8 +471,8 @@ class TradeRules:
                     return decisions
 
             if self.early_exit_bear_trend_enabled:
-                ma20 = ctx.get("ma20")
-                ma20_slope_atr = ctx.get("ma20_slope_atr")
+                ma20 = ctx.ma20
+                ma20_slope_atr = ctx.ma20_slope_atr
                 if ma20 is not None and ma20_slope_atr is not None:
                     try:
                         ma20_val = float(ma20)
@@ -474,10 +491,10 @@ class TradeRules:
 
         if ctx and self.ma_slope_gate_enabled:
             gate_pass, reasons, _ = evaluate_ma_slope_gate_from_values(
-                close=ctx.get("close"),
-                ma_fast=ctx.get("ma_slope_fast", ctx.get("ma20")),
-                ma_slow=ctx.get("ma_slope_slow", ctx.get("ma200")),
-                slope_pct=ctx.get("ma_slope_pct"),
+                close=ctx.close,
+                ma_fast=ctx.ma_slope_fast if ctx.ma_slope_fast is not None else ctx.ma20,
+                ma_slow=ctx.ma_slope_slow if ctx.ma_slope_slow is not None else ctx.ma200,
+                slope_pct=ctx.ma_slope_pct,
                 side="sell",
                 buy_slope_threshold=float(self.ma_slope_gate_cfg["buy_slope_threshold"]),
                 sell_slope_threshold=float(self.ma_slope_gate_cfg["sell_slope_threshold"]),
@@ -500,10 +517,10 @@ class TradeRules:
 
         if ctx is not None:
             if self.exit_on_structure_break:
-                bos = ctx.get("bos") or {}
+                bos = ctx.bos or {}
                 bos_dir = bos.get("direction")
                 bos_quality = _safe_float(bos.get("quality"), 0.0)
-                if ctx.get("structure_bias") == "BEAR":
+                if ctx and ctx.structure_bias == "BEAR":
                     decisions.append(ExitDecision(action="EXIT", reason="구조 붕괴/하락 전환(BEAR bias)", price=close_px))
                     return decisions
                 if bos_dir in ("BEAR", "DOWN") and bos_quality >= self.structure_break_quality_min:
@@ -517,7 +534,7 @@ class TradeRules:
                     return decisions
 
             if self.exit_on_score_drop:
-                score = float(ctx.get("soft_score", ctx.get("score", 0.0)))
+                score = float(ctx.soft_score if ctx.soft_score is not None else ctx.score)
                 if score < self.score_exit_threshold:
                     decisions.append(
                         ExitDecision(
@@ -533,22 +550,23 @@ class TradeRules:
 
     def _build_buy_reasons(
         self,
-        ctx: Dict[str, Any],
+        ctx: AnalysisContext | Dict[str, Any],
         eval_result: Dict[str, Any],
         entry_plan: EntryPlan,
         all_pass: bool,
     ) -> List[str]:
+        ctx = self._as_ctx(ctx)
         reasons = []
         if not all_pass:
             reasons.append("게이트 조건 일부 미달(상세는 게이트 표 참고).")
             gate_reasons = eval_result.get("gate_reasons", [])
             if gate_reasons:
                 reasons.extend(gate_reasons)
-        if ctx.get("structure_bias") == "BULL":
+        if ctx.structure_bias == "BULL":
             reasons.append("구조 바이어스: 상승(HH/HL 구조).")
-        if ctx.get("tag_confluence_ob_fvg"):
+        if ctx.tag_confluence_ob_fvg:
             reasons.append("OB/FVG 컨플루언스 구간으로 신뢰도 가점.")
-        momentum_60 = ctx.get("momentum_60")
+        momentum_60 = ctx.momentum_60
         if momentum_60 is not None and momentum_60 > 0:
             reasons.append("60일 모멘텀 양호.")
         entry_type_map = {
@@ -565,14 +583,16 @@ class TradeRules:
         )
         return reasons
 
-    def build_sell_reasons(self, exit_decisions: List[ExitDecision], position: Position, ctx: Dict[str, Any]) -> List[str]:
+    def build_sell_reasons(self, exit_decisions: List[ExitDecision], position: Position, ctx: Optional[AnalysisContext]) -> List[str]:
         reasons = []
         for d in exit_decisions:
             if d.action == "EXIT":
                 reasons.append(d.reason)
-        if ctx.get("structure_bias") == "BEAR":
+        if ctx and ctx.structure_bias == "BEAR":
             reasons.append("구조 바이어스 약세 전환.")
-        score_val = ctx.get("soft_score", ctx.get("score"))
+        score_val = None
+        if ctx is not None:
+            score_val = ctx.soft_score if ctx.soft_score is not None else ctx.score
         if score_val is not None:
             reasons.append(f"현재 소프트 점수 {float(score_val):.2f}.")
         if position.exit_rules.get("tp_sl_conflict"):
