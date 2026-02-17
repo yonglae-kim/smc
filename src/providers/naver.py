@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import re
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -70,10 +71,35 @@ class NaverMarketSumFetcher(UniverseFetcher):
     def __init__(self, http: HttpClient):
         self.http = http
 
+    def _load_code_set_from_api(self, url: str) -> set[str]:
+        try:
+            text = self.http.get(url).text
+            data = json.loads(text)
+        except Exception:
+            return set()
+        if not isinstance(data, list):
+            return set()
+        out: set[str] = set()
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            code = str(
+                row.get("itemcode")
+                or row.get("symbol")
+                or row.get("code")
+                or ""
+            )
+            if re.fullmatch(r"\d{6}", code):
+                out.add(code)
+        return out
+
     def _market_sum_url(self, sosok: int, page: int) -> str:
         return f"https://finance.naver.com/sise/sise_market_sum.nhn?sosok={sosok}&page={page}"
 
     def fetch_all_symbols(self):
+        etf_codes = self._load_code_set_from_api("https://finance.naver.com/api/sise/etfItemList.nhn")
+        etn_codes = self._load_code_set_from_api("https://finance.naver.com/api/sise/etnItemList.nhn")
+
         out = []
         for sosok, market in [(0,"KOSPI"),(1,"KOSDAQ")]:
             # Find last page via pagination block (pgRR). Fallback to a safe max.
@@ -96,7 +122,12 @@ class NaverMarketSumFetcher(UniverseFetcher):
                     if not m:
                         continue
                     symbol = m.group(1)
-                    out.append({"symbol": symbol, "name": name, "market": market})
+                    instrument = market
+                    if symbol in etf_codes:
+                        instrument = "ETF"
+                    elif symbol in etn_codes:
+                        instrument = "ETN"
+                    out.append({"symbol": symbol, "name": name, "market": instrument})
         # de-dup
         seen = set()
         uniq=[]
