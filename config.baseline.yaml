@@ -1,3 +1,4 @@
+config_version: 2
 app:
   out_dir: ./out
   cache_dir: ./cache
