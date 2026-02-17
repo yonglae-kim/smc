@@ -180,6 +180,7 @@ tbody tr:nth-child(even){background:#f8fafc}
 .toolbar{margin:10px 0 12px 0}
 .toolbar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .quick-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.market-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .chip-btn{
   border:1px solid #cbd5e1;
   background:#fff;
@@ -190,6 +191,8 @@ tbody tr:nth-child(even){background:#f8fafc}
   cursor:pointer;
 }
 .chip-btn.active{background:#dbeafe;border-color:#93c5fd;color:#1e3a8a}
+.market-tab-btn{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:6px 10px;font-size:12px;cursor:pointer}
+.market-tab-btn.active{background:#dbeafe;border-color:#93c5fd;color:#1e3a8a}
 .status-badges{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
 .status-badge{display:inline-flex;align-items:center;font-size:11px;color:#1e293b;background:#e2e8f0;border-radius:999px;padding:4px 8px}
 .sort-btn{border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;cursor:pointer}
@@ -253,8 +256,9 @@ tbody tr:nth-child(even){background:#f8fafc}
 </style>
 {% if include_js %}
 <script>
-const tableState={query:"",quickFilter:"all",sortColumn:1,sortDir:"desc"};
+const tableState={query:"",quickFilter:"all",sortColumn:1,sortDir:"desc",market:"all"};
 const pullbackState={sortKey:"fill",sortDir:"desc"};
+const buyState={market:"all"};
 function initProgressiveRows(group, step=20){
   const rows=Array.from(document.querySelectorAll(`[data-progressive-group="${group}"]`));
   if(!rows.length) return;
@@ -314,6 +318,20 @@ function applyQuickFilter(type){
   applyAllFilters();
   updateStatusBadges();
 }
+function applyMarketTab(group, market){
+  if(group==="universe"){
+    tableState.market=market;
+    document.querySelectorAll('[data-market-tab-group="universe"] .market-tab-btn').forEach((btn)=>btn.classList.toggle("active", btn.dataset.market===market));
+    applyAllFilters();
+    updateStatusBadges();
+    return;
+  }
+  if(group==="buy"){
+    buyState.market=market;
+    document.querySelectorAll('[data-market-tab-group="buy"] .market-tab-btn').forEach((btn)=>btn.classList.toggle("active", btn.dataset.market===market));
+    applyBuyMarketFilter();
+  }
+}
 function applyAllFilters(){
   const table=document.getElementById("uTable");
   if(!table) return;
@@ -325,13 +343,23 @@ function applyAllFilters(){
     const score=parseFloat(row.dataset.score||"0");
     const rank=parseFloat(row.dataset.rank||"9999");
     const gate=row.dataset.gate||"";
+    const market=(row.dataset.market||"").toUpperCase();
     let hitQuick=true;
     if(tableState.quickFilter==="rr2") hitQuick=score>=2;
     if(tableState.quickFilter==="scoreTop") hitQuick=rank<=50;
     if(tableState.quickFilter==="gatePass") hitQuick=gate==="1";
-    const visible=hitQuery && hitQuick;
+    const hitMarket=tableState.market==="all" || market===tableState.market;
+    const visible=hitQuery && hitQuick && hitMarket;
     row.style.display=visible ? "" : "none";
     if(detail && detail.classList.contains("detail-row")) detail.style.display=(visible && row.dataset.expanded==="1") ? "" : "none";
+  });
+}
+function applyBuyMarketFilter(){
+  const items=document.querySelectorAll('[data-buy-market-item="1"]');
+  items.forEach((el)=>{
+    const market=(el.dataset.market||"").toUpperCase();
+    const visible=buyState.market==="all" || market===buyState.market;
+    el.style.display=visible ? "" : "none";
   });
 }
 function openSortSheet(target="uTable"){
@@ -373,7 +401,8 @@ function updateStatusBadges(){
   const sortBadge=document.getElementById("sortBadge");
   if(queryBadge) queryBadge.innerText=tableState.query ? `검색: ${tableState.query}` : "검색: 전체";
   const filterMap={all:"필터: 없음",rr2:"필터: RR 2.0+",scoreTop:"필터: 점수 상위",gatePass:"필터: 게이트 통과"};
-  if(filterBadge) filterBadge.innerText=filterMap[tableState.quickFilter] || filterMap.all;
+  const marketLabelMap={all:"전체",KOSPI:"코스피",KOSDAQ:"코스닥"};
+  if(filterBadge) filterBadge.innerText=`${filterMap[tableState.quickFilter] || filterMap.all} · 시장 ${marketLabelMap[tableState.market] || marketLabelMap.all}`;
   const sortMap={0:"순위",1:"점수",6:"종가",7:"MA20",8:"MA200",9:"Slope20%",10:"RSI"};
   if(sortBadge) sortBadge.innerText=`정렬: ${sortMap[tableState.sortColumn]||"점수"} ${tableState.sortDir==="asc"?"오름차순":"내림차순"}`;
 }
@@ -405,6 +434,8 @@ function initStoryCards(){
 document.addEventListener("DOMContentLoaded",()=>{
   updateStatusBadges();
   applyQuickFilter("all");
+  applyMarketTab("universe", "all");
+  applyMarketTab("buy", "all");
   initStoryCards();
   initProgressiveRows("watch-row-desktop");
   initProgressiveRows("watch-row-mobile");
@@ -517,6 +548,11 @@ document.addEventListener("DOMContentLoaded",()=>{
 
 <h2 class="section-title">매수 후보 (다음 세션)</h2>
 <div class="small">시그널은 종가 기준 산출, {{ buy_valid_from }}부터 유효.</div>
+<div class="market-tabs" data-market-tab-group="buy">
+  <button class="market-tab-btn active" type="button" data-market="all" onclick="applyMarketTab('buy','all')">전체</button>
+  <button class="market-tab-btn" type="button" data-market="KOSPI" onclick="applyMarketTab('buy','KOSPI')">코스피</button>
+  <button class="market-tab-btn" type="button" data-market="KOSDAQ" onclick="applyMarketTab('buy','KOSDAQ')">코스닥</button>
+</div>
 
 <h3 class="section-title">즉시 진입 후보</h3>
 <div class="table-wrap desktop-only">
@@ -527,6 +563,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         <th>점수</th>
         <th>심볼</th>
         <th>종목명</th>
+        <th>시장</th>
         <th>진입 타입</th>
         <th>진입가</th>
         <th>손절</th>
@@ -537,11 +574,12 @@ document.addEventListener("DOMContentLoaded",()=>{
     </thead>
     <tbody>
     {% for b in immediate_buy_rows %}
-      <tr>
+      <tr data-buy-market-item="1" data-market="{{ b.market }}">
         <td>{{ b.rank }}</td>
         <td>{{ "%.2f"|format(b.signal.score) }}</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
+        <td>{{ b.market }}</td>
         <td>타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
@@ -563,7 +601,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 </div>
 <div class="mobile-only mobile-candidate-list">
   {% for b in immediate_buy_rows %}
-  <div class="mobile-candidate-card">
+  <div class="mobile-candidate-card" data-buy-market-item="1" data-market="{{ b.market }}">
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
@@ -575,6 +613,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         <div class="mobile-candidate-symbol-line">
           <span class="mobile-candidate-symbol">{{ b.symbol }}</span>
           <span class="mobile-candidate-name">{{ b.name }}</span>
+          <span class="mobile-candidate-entry">{{ b.market }}</span>
           <span class="mobile-candidate-entry">타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</span>
         </div>
         <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
@@ -609,6 +648,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         <th class="desktop-sort" onclick="sortTable(2, null, 'pullbackTable')">복귀가능성</th>
         <th>심볼</th>
         <th>종목명</th>
+        <th>시장</th>
         <th>진입 타입</th>
         <th>진입가</th>
         <th>손절</th>
@@ -623,12 +663,13 @@ document.addEventListener("DOMContentLoaded",()=>{
       {% set atr14 = (detail.atr14 if detail else none) %}
       {% set close_px = (detail.close if detail else none) %}
       {% set distance_atr = ((close_px - b.entry_plan.entry_price)|abs / atr14) if (atr14 is not none and atr14 > 0 and close_px is not none) else none %}
-      <tr class="data-row" data-progressive-group="watch-row-desktop">
+      <tr class="data-row" data-progressive-group="watch-row-desktop" data-buy-market-item="1" data-market="{{ b.market }}">
         <td data-sort="{{ b.rank }}">{{ b.rank }}</td>
         <td data-sort="{{ b.signal.score }}">{{ "%.2f"|format(b.signal.score) }}</td>
         <td data-sort="{{ b.fill_likelihood or 0 }}">복귀가능성 {{ "%.0f"|format((b.fill_likelihood or 0) * 100) }}%</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
+        <td>{{ b.market }}</td>
         <td>타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
         <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
@@ -644,8 +685,8 @@ document.addEventListener("DOMContentLoaded",()=>{
           {% endif %}
         </td>
       </tr>
-      <tr class="detail-row">
-        <td colspan="11">
+      <tr class="detail-row" data-buy-market-item="1" data-market="{{ b.market }}">
+        <td colspan="12">
           <div class="inline-detail">
             <div style="font-weight:700">핵심 근거</div>
             <div class="small" style="margin-top:4px">distance_atr: {{ "%.2f"|format(distance_atr) if distance_atr is not none else "-" }} · dist_to_ob_atr: {{ "%.2f"|format(detail.dist_to_ob_atr) if detail and detail.dist_to_ob_atr is not none else "-" }} · entry_type: {{ b.entry_plan.entry_type }} · atr_ratio: {{ "%.2f"|format(detail.atr_ratio) if detail and detail.atr_ratio is not none else "-" }}</div>
@@ -662,7 +703,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 <div class="mobile-only mobile-candidate-list" id="pullbackMobileList">
   {% for b in pullback_buy_rows %}
   {% set fill_pct = ((b.fill_likelihood or 0) * 100) %}
-  <div class="mobile-candidate-card" data-progressive-group="watch-row-mobile" data-fill-likelihood="{{ b.fill_likelihood or 0 }}" data-score="{{ b.signal.score }}" data-rank="{{ b.rank }}">
+  <div class="mobile-candidate-card" data-progressive-group="watch-row-mobile" data-fill-likelihood="{{ b.fill_likelihood or 0 }}" data-score="{{ b.signal.score }}" data-rank="{{ b.rank }}" data-buy-market-item="1" data-market="{{ b.market }}">
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
@@ -674,6 +715,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         <div class="mobile-candidate-symbol-line">
           <span class="mobile-candidate-symbol">{{ b.symbol }}</span>
           <span class="mobile-candidate-name">{{ b.name }}</span>
+          <span class="mobile-candidate-entry">{{ b.market }}</span>
           <span class="mobile-candidate-entry">타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</span>
         </div>
         <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
@@ -781,6 +823,11 @@ document.addEventListener("DOMContentLoaded",()=>{
     <button class="chip-btn" type="button" data-filter="scoreTop" onclick="applyQuickFilter('scoreTop')">점수 상위</button>
     <button class="chip-btn" type="button" data-filter="gatePass" onclick="applyQuickFilter('gatePass')">게이트 통과</button>
   </div>
+  <div class="market-tabs" data-market-tab-group="universe">
+    <button class="market-tab-btn active" type="button" data-market="all" onclick="applyMarketTab('universe','all')">전체</button>
+    <button class="market-tab-btn" type="button" data-market="KOSPI" onclick="applyMarketTab('universe','KOSPI')">코스피</button>
+    <button class="market-tab-btn" type="button" data-market="KOSDAQ" onclick="applyMarketTab('universe','KOSDAQ')">코스닥</button>
+  </div>
   <div class="status-badges">
     <span id="queryBadge" class="status-badge">검색: 전체</span>
     <span id="filterBadge" class="status-badge">필터: 없음</span>
@@ -809,7 +856,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     <tbody>
     {% for r in table_rows %}
       {% set gate_pass = 1 if ('gate_pass' in (r.tags|join(' ')|lower) or 'pass' in (r.tags|join(' ')|lower)) else 0 %}
-      <tr class="data-row" data-progressive-group="table-row" data-symbol="{{ r.symbol|lower }}" data-score="{{ r.score }}" data-rank="{{ r.rank }}" data-gate="{{ gate_pass }}" data-expanded="0" onclick="openRowDetail(this)">
+      <tr class="data-row" data-progressive-group="table-row" data-symbol="{{ r.symbol|lower }}" data-score="{{ r.score }}" data-rank="{{ r.rank }}" data-gate="{{ gate_pass }}" data-expanded="0" data-market="{{ r.market }}" onclick="openRowDetail(this)">
         <td data-sort="{{ r.rank }}">{{ r.rank }}</td>
         <td data-sort="{{ r.score }}">{{ "%.1f"|format(r.score) }}</td>
         <td>{{ r.symbol }}</td>

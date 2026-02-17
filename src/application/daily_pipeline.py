@@ -248,6 +248,7 @@ class DailyPipelineService:
                         "rank": rank,
                         "symbol": row["signal"].symbol,
                         "name": row["ctx"].get("name", ""),
+                        "market": row["ctx"].get("market", ""),
                         "signal": row["signal"],
                         "entry_plan": row["entry_plan"],
                         "fill_likelihood": row.get("fill_likelihood"),
