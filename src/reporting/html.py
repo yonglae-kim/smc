@@ -254,6 +254,7 @@ tbody tr:nth-child(even){background:#f8fafc}
 {% if include_js %}
 <script>
 const tableState={query:"",quickFilter:"all",sortColumn:1,sortDir:"desc"};
+const pullbackState={sortKey:"fill",sortDir:"desc"};
 function initProgressiveRows(group, step=20){
   const rows=Array.from(document.querySelectorAll(`[data-progressive-group="${group}"]`));
   if(!rows.length) return;
@@ -270,11 +271,13 @@ function initProgressiveRows(group, step=20){
   });
 }
 
-function sortTable(n, forcedDir){
-  const table=document.getElementById("uTable");
+function sortTable(n, forcedDir, tableId="uTable"){
+  const table=document.getElementById(tableId);
+  if(!table) return;
   const tbody=table.querySelector("tbody");
   const rows=Array.from(tbody.querySelectorAll("tr.data-row"));
-  const dir = forcedDir || ((tableState.sortColumn===n && tableState.sortDir==="desc") ? "asc" : "desc");
+  const state = tableId==="uTable" ? tableState : null;
+  const dir = forcedDir || ((state && state.sortColumn===n && state.sortDir==="desc") ? "asc" : "desc");
   rows.sort((a,b)=>{
     const x=a.getElementsByTagName("TD")[n];
     const y=b.getElementsByTagName("TD")[n];
@@ -293,10 +296,12 @@ function sortTable(n, forcedDir){
     tbody.appendChild(row);
     if(detail && detail.classList.contains("detail-row")) tbody.appendChild(detail);
   });
-  tableState.sortColumn=n;
-  tableState.sortDir=dir;
-  updateStatusBadges();
-  applyAllFilters();
+  if(state){
+    tableState.sortColumn=n;
+    tableState.sortDir=dir;
+    updateStatusBadges();
+    applyAllFilters();
+  }
 }
 function filterTable(){
   tableState.query=document.getElementById("q").value.toLowerCase();
@@ -329,9 +334,39 @@ function applyAllFilters(){
     if(detail && detail.classList.contains("detail-row")) detail.style.display=(visible && row.dataset.expanded==="1") ? "" : "none";
   });
 }
-function openSortSheet(){ const el=document.getElementById("sortModal"); if(el) el.classList.add("open"); }
-function closeSortSheet(){ const el=document.getElementById("sortModal"); if(el) el.classList.remove("open"); }
-function sortByOption(col, dir){ sortTable(col, dir); closeSortSheet(); }
+function openSortSheet(target="uTable"){
+  const modalId=target==="pullbackMobileList" ? "pullbackSortModal" : "sortModal";
+  const el=document.getElementById(modalId);
+  if(el) el.classList.add("open");
+}
+function closeSortSheet(target="uTable"){
+  const modalId=target==="pullbackMobileList" ? "pullbackSortModal" : "sortModal";
+  const el=document.getElementById(modalId);
+  if(el) el.classList.remove("open");
+}
+function sortPullbackMobile(key, dir){
+  const list=document.getElementById("pullbackMobileList");
+  if(!list) return;
+  const cards=Array.from(list.querySelectorAll(".mobile-candidate-card"));
+  cards.sort((a,b)=>{
+    const av=key==="fill" ? parseFloat(a.dataset.fillLikelihood||"0") : (key==="score" ? parseFloat(a.dataset.score||"0") : parseFloat(a.dataset.rank||"9999"));
+    const bv=key==="fill" ? parseFloat(b.dataset.fillLikelihood||"0") : (key==="score" ? parseFloat(b.dataset.score||"0") : parseFloat(b.dataset.rank||"9999"));
+    const cmp=(Number.isNaN(av)?0:av)-(Number.isNaN(bv)?0:bv);
+    return dir==="asc" ? cmp : -cmp;
+  });
+  cards.forEach((card)=>list.appendChild(card));
+  pullbackState.sortKey=key;
+  pullbackState.sortDir=dir;
+}
+function sortByOption(col, dir, target="uTable"){
+  if(target==="pullbackMobileList"){
+    sortPullbackMobile(col, dir);
+    closeSortSheet("pullbackMobileList");
+    return;
+  }
+  sortTable(col, dir, target);
+  closeSortSheet(target);
+}
 function updateStatusBadges(){
   const queryBadge=document.getElementById("queryBadge");
   const filterBadge=document.getElementById("filterBadge");
@@ -564,12 +599,14 @@ document.addEventListener("DOMContentLoaded",()=>{
 </div>
 
 <h3 class="section-title">되돌림 대기 후보</h3>
+<div class="small" style="margin-bottom:8px">점수=종합매력도, 복귀가능성=진입가 재터치 확률</div>
 <div class="table-wrap desktop-only">
-  <table>
+  <table id="pullbackTable">
     <thead>
       <tr>
-        <th>순위</th>
-        <th>점수</th>
+        <th class="desktop-sort" onclick="sortTable(0, null, 'pullbackTable')">순위</th>
+        <th class="desktop-sort" onclick="sortTable(1, null, 'pullbackTable')">점수</th>
+        <th class="desktop-sort" onclick="sortTable(2, null, 'pullbackTable')">복귀가능성</th>
         <th>심볼</th>
         <th>종목명</th>
         <th>진입 타입</th>
@@ -582,9 +619,14 @@ document.addEventListener("DOMContentLoaded",()=>{
     </thead>
     <tbody>
   {% for b in pullback_buy_rows %}
-      <tr data-progressive-group="watch-row-desktop">
-        <td>{{ b.rank }}</td>
-        <td>{{ "%.2f"|format(b.signal.score) }}</td>
+      {% set detail = (buy_details|selectattr('symbol', 'equalto', b.symbol)|list|first) %}
+      {% set atr14 = (detail.atr14 if detail else none) %}
+      {% set close_px = (detail.close if detail else none) %}
+      {% set distance_atr = ((close_px - b.entry_plan.entry_price)|abs / atr14) if (atr14 is not none and atr14 > 0 and close_px is not none) else none %}
+      <tr class="data-row" data-progressive-group="watch-row-desktop">
+        <td data-sort="{{ b.rank }}">{{ b.rank }}</td>
+        <td data-sort="{{ b.signal.score }}">{{ "%.2f"|format(b.signal.score) }}</td>
+        <td data-sort="{{ b.fill_likelihood or 0 }}">복귀가능성 {{ "%.0f"|format((b.fill_likelihood or 0) * 100) }}%</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
         <td>타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
@@ -602,13 +644,25 @@ document.addEventListener("DOMContentLoaded",()=>{
           {% endif %}
         </td>
       </tr>
+      <tr class="detail-row">
+        <td colspan="11">
+          <div class="inline-detail">
+            <div style="font-weight:700">핵심 근거</div>
+            <div class="small" style="margin-top:4px">distance_atr: {{ "%.2f"|format(distance_atr) if distance_atr is not none else "-" }} · dist_to_ob_atr: {{ "%.2f"|format(detail.dist_to_ob_atr) if detail and detail.dist_to_ob_atr is not none else "-" }} · entry_type: {{ b.entry_plan.entry_type }} · atr_ratio: {{ "%.2f"|format(detail.atr_ratio) if detail and detail.atr_ratio is not none else "-" }}</div>
+          </div>
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
-<div class="mobile-only mobile-candidate-list">
+<div class="mobile-only" style="margin-bottom:8px">
+  <button class="sort-btn" type="button" onclick="openSortSheet('pullbackMobileList')">되돌림 정렬</button>
+</div>
+<div class="mobile-only mobile-candidate-list" id="pullbackMobileList">
   {% for b in pullback_buy_rows %}
-  <div class="mobile-candidate-card" data-progressive-group="watch-row-mobile">
+  {% set fill_pct = ((b.fill_likelihood or 0) * 100) %}
+  <div class="mobile-candidate-card" data-progressive-group="watch-row-mobile" data-fill-likelihood="{{ b.fill_likelihood or 0 }}" data-score="{{ b.signal.score }}" data-rank="{{ b.rank }}">
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
@@ -625,13 +679,17 @@ document.addEventListener("DOMContentLoaded",()=>{
         <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
       </div>
     </div>
+    <div class="mobile-candidate-gate">복귀가능성 {{ "%.0f"|format(fill_pct) }}% · 점수 {{ "%.2f"|format(b.signal.score) }}</div>
     <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
     <details>
       <summary>상세 보기</summary>
       {% if detail %}
+      {% set atr14 = detail.atr14 %}
+      {% set distance_atr = ((detail.close - b.entry_plan.entry_price)|abs / atr14) if (atr14 is not none and atr14 > 0) else none %}
       <div class="mobile-candidate-detail">
         <img src="{{ detail.chart_src }}" alt="{{ detail.symbol }} 차트"/>
         <div class="small" style="margin-top:8px">RR {{ "%.2f"|format(detail.entry_plan.rr) }} · 기대수익 {{ "%.2f"|format(detail.entry_plan.expected_return*100) }}%</div>
+        <div class="small" style="margin-top:6px">핵심 근거 · distance_atr {{ "%.2f"|format(distance_atr) if distance_atr is not none else "-" }} · dist_to_ob_atr {{ "%.2f"|format(detail.dist_to_ob_atr) if detail.dist_to_ob_atr is not none else "-" }} · entry_type {{ b.entry_plan.entry_type }} · atr_ratio {{ "%.2f"|format(detail.atr_ratio) if detail.atr_ratio is not none else "-" }}</div>
         <div style="font-weight:700;margin:8px 0 4px 0">진입 사유</div>
         <pre>{{ detail.reason_text }}</pre>
       </div>
@@ -787,6 +845,15 @@ document.addEventListener("DOMContentLoaded",()=>{
     <button class="sort-option" type="button" onclick="sortByOption(0,'asc')">순위 빠른 순</button>
     <button class="sort-option" type="button" onclick="sortByOption(10,'desc')">RSI 높은 순</button>
     <button class="sort-option" type="button" onclick="closeSortSheet()">닫기</button>
+  </div>
+</div>
+<div id="pullbackSortModal" class="sort-modal" onclick="if(event.target===this) closeSortSheet('pullbackMobileList')">
+  <div class="sort-sheet">
+    <div style="font-weight:700">되돌림 후보 정렬</div>
+    <button class="sort-option" type="button" onclick="sortByOption('fill','desc','pullbackMobileList')">복귀가능성 높은 순</button>
+    <button class="sort-option" type="button" onclick="sortByOption('score','desc','pullbackMobileList')">점수 높은 순</button>
+    <button class="sort-option" type="button" onclick="sortByOption('rank','asc','pullbackMobileList')">순위 빠른 순</button>
+    <button class="sort-option" type="button" onclick="closeSortSheet('pullbackMobileList')">닫기</button>
   </div>
 </div>
 </div>
