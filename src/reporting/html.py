@@ -401,7 +401,7 @@ function updateStatusBadges(){
   const sortBadge=document.getElementById("sortBadge");
   if(queryBadge) queryBadge.innerText=tableState.query ? `검색: ${tableState.query}` : "검색: 전체";
   const filterMap={all:"필터: 없음",rr2:"필터: RR 2.0+",scoreTop:"필터: 점수 상위",gatePass:"필터: 게이트 통과"};
-  const marketLabelMap={all:"전체",KOSPI:"코스피",KOSDAQ:"코스닥"};
+  const marketLabelMap={all:"전체",KOSPI:"코스피",KOSDAQ:"코스닥",ETF:"ETF",ETN:"ETN"};
   if(filterBadge) filterBadge.innerText=`${filterMap[tableState.quickFilter] || filterMap.all} · 시장 ${marketLabelMap[tableState.market] || marketLabelMap.all}`;
   const sortMap={0:"순위",1:"점수",6:"종가",7:"MA20",8:"MA200",9:"Slope20%",10:"RSI"};
   if(sortBadge) sortBadge.innerText=`정렬: ${sortMap[tableState.sortColumn]||"점수"} ${tableState.sortDir==="asc"?"오름차순":"내림차순"}`;
@@ -552,6 +552,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   <button class="market-tab-btn active" type="button" data-market="all" onclick="applyMarketTab('buy','all')">전체</button>
   <button class="market-tab-btn" type="button" data-market="KOSPI" onclick="applyMarketTab('buy','KOSPI')">코스피</button>
   <button class="market-tab-btn" type="button" data-market="KOSDAQ" onclick="applyMarketTab('buy','KOSDAQ')">코스닥</button>
+  <button class="market-tab-btn" type="button" data-market="ETF" onclick="applyMarketTab('buy','ETF')">ETF</button>
+  <button class="market-tab-btn" type="button" data-market="ETN" onclick="applyMarketTab('buy','ETN')">ETN</button>
 </div>
 
 <h3 class="section-title">즉시 진입 후보</h3>
@@ -827,6 +829,8 @@ document.addEventListener("DOMContentLoaded",()=>{
     <button class="market-tab-btn active" type="button" data-market="all" onclick="applyMarketTab('universe','all')">전체</button>
     <button class="market-tab-btn" type="button" data-market="KOSPI" onclick="applyMarketTab('universe','KOSPI')">코스피</button>
     <button class="market-tab-btn" type="button" data-market="KOSDAQ" onclick="applyMarketTab('universe','KOSDAQ')">코스닥</button>
+    <button class="market-tab-btn" type="button" data-market="ETF" onclick="applyMarketTab('universe','ETF')">ETF</button>
+    <button class="market-tab-btn" type="button" data-market="ETN" onclick="applyMarketTab('universe','ETN')">ETN</button>
   </div>
   <div class="status-badges">
     <span id="queryBadge" class="status-badge">검색: 전체</span>
