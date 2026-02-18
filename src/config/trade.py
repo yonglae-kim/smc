@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Dict, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -36,7 +36,7 @@ class TradeCfg(BaseModel):
     tp1_trail_atr_mult: float = 0.0
     min_score_regime_non_tailwind_add: float = 0.0
     min_score_regime_headwind_add: float = 0.0
-    entry_type_score_add: dict[str, float] = Field(default_factory=dict)
+    entry_type_score_add: Dict[str, float] = Field(default_factory=dict)
     enable_trend_filter: bool = False
     trend_ma_stack: bool = True
     trend_slope_atr_min: float = 0.0
