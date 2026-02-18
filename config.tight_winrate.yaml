@@ -99,6 +99,8 @@ trade:
   enable_bb_squeeze_breakout: true
   bb_squeeze_max_width: 0.08
   min_confirmations: 2
+  entry_type_score_add:
+    reclaim: 0.75
 backtest:
   start: '2025-01-01'
   end: '2025-12-31'
@@ -132,6 +134,8 @@ backtest:
     w_fvg_age_old: -0.5
     require_tailwind: true
     require_above_ma200: true
+    w_regime_tailwind: 0.5
+    w_regime_headwind: -1.0
     ma_slope_gate:
       enabled: true
       ma_fast: 20

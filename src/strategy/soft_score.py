@@ -62,6 +62,10 @@ class SoftScoreStrategy(Strategy):
         self.fvg_age_max = int(p.get("fvg_age_max", 60))
         self.w_fvg_age_old = float(p.get("w_fvg_age_old", -0.5))
         self.require_positive_momentum_60 = bool(p.get("require_positive_momentum_60", False))
+        self.require_tailwind = bool(p.get("require_tailwind", False))
+        self.require_above_ma200 = bool(p.get("require_above_ma200", False))
+        self.w_regime_tailwind = float(p.get("w_regime_tailwind", 0.0))
+        self.w_regime_headwind = float(p.get("w_regime_headwind", 0.0))
         self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(p.get("ma_slope_gate"))
         self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
         trade_cfg = getattr(cfg, "trade", None)
@@ -99,6 +103,11 @@ class SoftScoreStrategy(Strategy):
             structure_bias == "BULL"
             or (ma20_slope_atr is not None and ma20_slope_atr >= self.trend_gate_ma20_slope_atr_threshold)
         )
+        if self.require_above_ma200:
+            gates["above_ma200_required"] = bool(ctx.get("above_ma200"))
+        if self.require_tailwind:
+            regime_tag = str((ctx.get("symbol_regime") or {}).get("tag", "")).upper()
+            gates["tailwind_required"] = regime_tag == "TAILWIND"
         if self.ma_slope_gate_enabled:
             gate_pass, reasons, metrics = evaluate_ma_slope_gate_from_values(
                 close=ctx.get("close"),
@@ -267,6 +276,15 @@ class SoftScoreStrategy(Strategy):
             breakdown["fvg_age"] = self.w_fvg_age_old
         else:
             breakdown["fvg_age"] = 0.0
+
+        regime_tag = str((ctx.get("symbol_regime") or {}).get("tag", "")).upper()
+        regime_bonus = 0.0
+        if regime_tag == "TAILWIND":
+            regime_bonus = self.w_regime_tailwind
+        elif regime_tag == "HEADWIND":
+            regime_bonus = self.w_regime_headwind
+        score += regime_bonus
+        breakdown["regime"] = regime_bonus
 
         breakdown["total"] = score
         return {

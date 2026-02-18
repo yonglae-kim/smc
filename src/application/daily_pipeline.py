@@ -237,7 +237,10 @@ class DailyPipelineService:
 
         for row in pullback_buys:
             row["fill_likelihood"] = _compute_pullback_fill_likelihood(row["ctx"], row["entry_plan"])
-        pullback_buys.sort(key=lambda r: (-r["fill_likelihood"], -r["signal"].score, r["signal"].symbol))
+            row["execution_priority"] = row["fill_likelihood"] * max(float(row["signal"].score), 0.0)
+        pullback_buys.sort(
+            key=lambda r: (-r.get("execution_priority", 0.0), -r["fill_likelihood"], -r["signal"].score, r["signal"].symbol)
+        )
         buy_valid_from = self.trade_rules.next_trading_day(cal, self.ymd) if cal else self.ymd
 
         def build_buy_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -252,6 +255,7 @@ class DailyPipelineService:
                         "signal": row["signal"],
                         "entry_plan": row["entry_plan"],
                         "fill_likelihood": row.get("fill_likelihood"),
+                        "execution_priority": row.get("execution_priority"),
                         "gates": [{"key": k, "pass": v} for k, v in row["signal"].gates.items()],
                     }
                 )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class TradeCfg(BaseModel):
@@ -34,8 +34,24 @@ class TradeCfg(BaseModel):
     tp1_risk_reduction_enabled: bool = True
     tp1_stop_atr_buffer: float = 0.25
     tp1_trail_atr_mult: float = 0.0
+    min_score_regime_non_tailwind_add: float = 0.0
+    min_score_regime_headwind_add: float = 0.0
+    entry_type_score_add: dict[str, float] = Field(default_factory=dict)
+    enable_trend_filter: bool = False
+    trend_ma_stack: bool = True
+    trend_slope_atr_min: float = 0.0
+    enable_volatility_filter: bool = False
+    max_atr_pct: float = 0.08
+    max_atr_ratio: float = 2.2
+    enable_volume_confirm: bool = False
+    min_volume_ratio: float = 1.2
+    enable_rs_rank: bool = False
+    rs_rank_min_pct: float = 0.5
+    enable_bb_squeeze_breakout: bool = False
+    bb_squeeze_max_width: float = 0.12
+    min_confirmations: int = 0
 
-    @field_validator("execution_delay_days", "force_top_k", "max_hold_days", "early_exit_rsi_macd_days")
+    @field_validator("execution_delay_days", "force_top_k", "max_hold_days", "early_exit_rsi_macd_days", "min_confirmations")
     @classmethod
     def _non_negative_int(cls, value: int) -> int:
         if value < 0:
@@ -52,6 +68,14 @@ class TradeCfg(BaseModel):
         "trail_atr_mult",
         "tp1_stop_atr_buffer",
         "tp1_trail_atr_mult",
+        "min_score_regime_non_tailwind_add",
+        "min_score_regime_headwind_add",
+        "trend_slope_atr_min",
+        "max_atr_pct",
+        "max_atr_ratio",
+        "min_volume_ratio",
+        "rs_rank_min_pct",
+        "bb_squeeze_max_width",
     )
     @classmethod
     def _non_negative_float(cls, value: float) -> float:
