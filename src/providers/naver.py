@@ -71,18 +71,42 @@ class NaverMarketSumFetcher(UniverseFetcher):
     def __init__(self, http: HttpClient):
         self.http = http
 
+    def _extract_code_rows(self, payload) -> list[dict]:
+        """Support both legacy list payloads and wrapped payloads.
+
+        Examples:
+        - [{"itemcode": "123456"}, ...]
+        - {"result": {"etnItemList": [{"itemcode": "123456"}, ...]}}
+        - {"result": {"etfItemList": [{"itemcode": "123456"}, ...]}}
+        """
+        if isinstance(payload, list):
+            return [row for row in payload if isinstance(row, dict)]
+        if not isinstance(payload, dict):
+            return []
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else payload
+        for key in ("etnItemList", "etfItemList", "itemList", "items"):
+            rows = result.get(key) if isinstance(result, dict) else None
+            if isinstance(rows, list):
+                return [row for row in rows if isinstance(row, dict)]
+
+        # Fallback: find first list-of-dicts field in result wrapper.
+        if isinstance(result, dict):
+            for value in result.values():
+                if isinstance(value, list) and all(isinstance(x, dict) for x in value):
+                    return value
+        return []
+
     def _load_code_set_from_api(self, url: str) -> set[str]:
         try:
             text = self.http.get(url).text
             data = json.loads(text)
         except Exception:
             return set()
-        if not isinstance(data, list):
-            return set()
+
+        rows = self._extract_code_rows(data)
         out: set[str] = set()
-        for row in data:
-            if not isinstance(row, dict):
-                continue
+        for row in rows:
             code = str(
                 row.get("itemcode")
                 or row.get("symbol")
