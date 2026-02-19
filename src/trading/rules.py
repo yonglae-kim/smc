@@ -34,6 +34,13 @@ class TradeRules:
             self.entry_price_mode = str(getattr(trade, "entry_price_mode", backtest.fill_price))
         self.force_top_k = int(getattr(trade, "force_top_k", 0))
 
+        # Backward-compatible accessors used by pipeline/backtest call sites.
+        self.min_risk_ratio = float(getattr(trade, "min_risk_ratio", 0.001))
+        self.move_stop_to_entry = bool(getattr(trade, "move_stop_to_entry", True))
+        self.exit_on_structure_break = bool(getattr(trade, "exit_on_structure_break", True))
+        self.exit_on_score_drop = bool(getattr(trade, "exit_on_score_drop", True))
+        self.trail_atr_mult = float(getattr(trade, "trail_atr_mult", 0.0))
+
     @staticmethod
     def _as_ctx(ctx: AnalysisContext | Dict[str, Any]) -> AnalysisContext:
         if isinstance(ctx, AnalysisContext):
