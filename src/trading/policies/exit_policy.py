@@ -179,14 +179,31 @@ class ExitPolicy:
 
         return decisions + [ExitDecision(action="HOLD", reason="보유 유지")]
 
-    def build_sell_reasons(self, exit_decisions: List[ExitDecision], position: Position, ctx: Optional[AnalysisContext]) -> List[str]:
+    def build_sell_reasons(
+        self,
+        exit_decisions: List[ExitDecision],
+        position: Position,
+        ctx: Optional[AnalysisContext | Dict[str, Any]],
+    ) -> List[str]:
+        def _ctx_value(key: str) -> Any:
+            if ctx is None:
+                return None
+            if isinstance(ctx, dict):
+                return ctx.get(key)
+            return getattr(ctx, key, None)
+
         reasons = [d.reason for d in exit_decisions if d.action == "EXIT"]
-        if ctx and ctx.structure_bias == "BEAR":
+        if _ctx_value("structure_bias") == "BEAR":
             reasons.append("구조 바이어스 약세 전환.")
         if ctx is not None:
-            score_val = ctx.soft_score if ctx.soft_score is not None else ctx.score
+            soft_score = _ctx_value("soft_score")
+            score = _ctx_value("score")
+            score_val = soft_score if soft_score is not None else score
             if score_val is not None:
-                reasons.append(f"현재 소프트 점수 {float(score_val):.2f}.")
+                try:
+                    reasons.append(f"현재 소프트 점수 {float(score_val):.2f}.")
+                except (TypeError, ValueError):
+                    pass
         if position.exit_rules.get("tp_sl_conflict"):
             conflict_map = {"optimistic": "낙관적(TP 우선)", "conservative": "보수적(SL 우선)"}
             conflict_label = conflict_map.get(position.exit_rules["tp_sl_conflict"], position.exit_rules["tp_sl_conflict"])
