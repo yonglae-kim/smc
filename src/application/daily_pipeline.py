@@ -43,6 +43,23 @@ class DailyPipelineService:
         self.ctx_map: Dict[str, Dict[str, Any]] = {}
         self.cal_dates = set()
 
+    def _assign_cross_sectional_scores(self, rows: List[Dict[str, Any]]) -> None:
+        def _assign_z(key: str, out_key: str) -> None:
+            vals = [float(r[key]) for r in rows if r.get(key) is not None]
+            if len(vals) < 2:
+                for r in rows:
+                    r[out_key] = 0.0
+                return
+            mean = float(sum(vals) / len(vals))
+            var = float(sum((v - mean) ** 2 for v in vals) / len(vals))
+            std = var ** 0.5
+            for r in rows:
+                v = r.get(key)
+                r[out_key] = 0.0 if v is None or std <= 1e-9 else float((float(v) - mean) / std)
+
+        _assign_z("mom_252_21", "mom_252_21_z")
+        _assign_z("vol_60", "vol_60_z")
+
     def build_universe(self) -> Tuple[List[Dict[str, Any]], Dict[str, Any], str]:
         universe_label = (
             "전체 종목"
@@ -316,6 +333,7 @@ class DailyPipelineService:
 
         self.storage.save_json(progress_key, {"done": []})
         cal = sorted(self.cal_dates)
+        self._assign_cross_sectional_scores(rows)
         rows_sorted = sorted(rows, key=lambda x: (-x.get("score", 0), x.get("symbol", "")))
 
         signal_rows = []

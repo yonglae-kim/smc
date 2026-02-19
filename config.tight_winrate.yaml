@@ -136,6 +136,15 @@ backtest:
     require_above_ma200: true
     w_regime_tailwind: 0.5
     w_regime_headwind: -1.0
+    w_cross_sectional_momentum: 1.0
+    cross_momentum_gate_enabled: true
+    cross_momentum_gate_mode: "ma200"
+    low_vol_penalty_enabled: true
+    low_vol_penalty_lambda: 0.35
+    momentum_breakout_entry_enabled: true
+    momentum_breakout_tick: 0.0
+    momentum_stop_atr_mult: 2.5
+    momentum_rr_target: 2.0
     ma_slope_gate:
       enabled: true
       ma_fast: 20
