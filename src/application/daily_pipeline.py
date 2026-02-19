@@ -457,7 +457,7 @@ class DailyPipelineService:
                 )
                 chart_src = ""
                 if ctx:
-                    ctx = dict(ctx)
+                    ctx = ctx.model_dump() if hasattr(ctx, "model_dump") else dict(ctx)
                     ctx["position"] = pos.to_dict()
                     df_chart = self.storage.load_ohlcv_cache(pos.symbol)
                     if df_chart is not None and not df_chart.empty:
