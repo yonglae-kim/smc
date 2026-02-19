@@ -66,6 +66,11 @@ class SoftScoreStrategy(Strategy):
         self.require_above_ma200 = bool(p.get("require_above_ma200", False))
         self.w_regime_tailwind = float(p.get("w_regime_tailwind", 0.0))
         self.w_regime_headwind = float(p.get("w_regime_headwind", 0.0))
+        self.w_cross_sectional_momentum = float(p.get("w_cross_sectional_momentum", 1.0))
+        self.cross_momentum_gate_enabled = bool(p.get("cross_momentum_gate_enabled", True))
+        self.cross_momentum_gate_mode = str(p.get("cross_momentum_gate_mode", "ma200")).lower()
+        self.low_vol_penalty_enabled = bool(p.get("low_vol_penalty_enabled", True))
+        self.low_vol_penalty_lambda = float(p.get("low_vol_penalty_lambda", 0.35))
         self.ma_slope_gate_cfg = normalize_ma_slope_gate_config(p.get("ma_slope_gate"))
         self.ma_slope_gate_enabled = bool(self.ma_slope_gate_cfg.get("enabled", True))
         trade_cfg = getattr(cfg, "trade", None)
@@ -123,6 +128,19 @@ class SoftScoreStrategy(Strategy):
             gates["ma_slope_gate"] = gate_pass
             gate_reasons.extend(reasons)
             gate_metrics.update(metrics)
+
+        if self.cross_momentum_gate_enabled:
+            close = ctx.get("close")
+            ma200 = ctx.get("ma200")
+            ret_252 = ctx.get("ret_252")
+            if self.cross_momentum_gate_mode == "ret252":
+                gates["cross_momentum_trend"] = ret_252 is not None and float(ret_252) > 0.0
+                if not gates["cross_momentum_trend"]:
+                    gate_reasons.append("cross_momentum_trend 실패: ret_252 <= 0")
+            else:
+                gates["cross_momentum_trend"] = close is not None and ma200 is not None and float(close) > float(ma200)
+                if not gates["cross_momentum_trend"]:
+                    gate_reasons.append("cross_momentum_trend 실패: close <= ma200")
         return gates, gate_reasons, gate_metrics
 
     def evaluate(self, ctx: Dict[str, Any]) -> Dict[str, Any]:
@@ -229,6 +247,15 @@ class SoftScoreStrategy(Strategy):
         else:
             breakdown["momentum_60"] = 0.0
 
+        mom_252_21_z = ctx.get("mom_252_21_z")
+        if mom_252_21_z is None:
+            mom_252_21_z = ctx.get("mom_252_21")
+        cross_momentum_score = 0.0
+        if mom_252_21_z is not None:
+            cross_momentum_score = self.w_cross_sectional_momentum * float(mom_252_21_z)
+            score += cross_momentum_score
+        breakdown["cross_momentum_252_21"] = cross_momentum_score
+
         ma20_slope_atr = ctx.get("ma20_slope_atr")
         if ma20_slope_atr is not None and ma20_slope_atr >= self.ma20_slope_atr_threshold:
             score += self.w_ma20_slope
@@ -285,6 +312,14 @@ class SoftScoreStrategy(Strategy):
             regime_bonus = self.w_regime_headwind
         score += regime_bonus
         breakdown["regime"] = regime_bonus
+
+        vol_overlay = 0.0
+        if self.low_vol_penalty_enabled:
+            vol_60_z = ctx.get("vol_60_z")
+            if vol_60_z is not None:
+                vol_overlay = -self.low_vol_penalty_lambda * float(vol_60_z)
+                score += vol_overlay
+        breakdown["low_vol_overlay"] = vol_overlay
 
         breakdown["total"] = score
         return {

@@ -18,9 +18,14 @@ def safe_float(val: Optional[float], fallback: float) -> float:
 class EntryPolicy:
     def __init__(self, cfg):
         trade = getattr(cfg, "trade", None)
+        strategy_params = getattr(cfg.backtest, "strategy_params", {}) or {}
         self.stop_atr_mult = float(getattr(trade, "stop_atr_mult", 1.5))
         self.min_risk_ratio = float(getattr(trade, "min_risk_ratio", 0.001))
         self.rr_target = float(getattr(trade, "tp_rr_target", 2.0))
+        self.momentum_breakout_enabled = bool(strategy_params.get("momentum_breakout_entry_enabled", False))
+        self.momentum_breakout_tick = float(strategy_params.get("momentum_breakout_tick", 0.0))
+        self.momentum_stop_atr_mult = float(strategy_params.get("momentum_stop_atr_mult", 2.5))
+        self.momentum_rr_target = float(strategy_params.get("momentum_rr_target", 2.0))
 
     def suggest_entry(self, ctx: AnalysisContext) -> Tuple[str, float, List[str]]:
         close_px = float(ctx.close)
@@ -57,9 +62,14 @@ class EntryPolicy:
     def build_entry_plan(self, ctx: AnalysisContext, entry_price: float) -> EntryPlan:
         entry_type, suggested_price, rationale = self.suggest_entry(ctx)
         entry_px = entry_price if entry_type == "next_open" else suggested_price
+        if self.momentum_breakout_enabled and ctx.recent_high_20 is not None:
+            entry_type = "breakout_20"
+            entry_px = max(entry_px, float(ctx.recent_high_20) + self.momentum_breakout_tick)
+            rationale.append("20일 고점 돌파 + tick 진입 규칙 적용.")
         atr = safe_float(ctx.atr14, entry_px * 0.02)
         ob = ctx.ob
-        stop_loss = safe_float(ob.invalidation if ob else None, entry_px - atr * self.stop_atr_mult)
+        stop_mult = self.momentum_stop_atr_mult if self.momentum_breakout_enabled else self.stop_atr_mult
+        stop_loss = safe_float(ob.invalidation if ob else None, entry_px - atr * stop_mult)
         if not math.isfinite(stop_loss) or stop_loss >= entry_px:
             stop_loss = entry_px * (1 - self.min_risk_ratio)
         min_risk_per_share = entry_px * self.min_risk_ratio
@@ -68,7 +78,7 @@ class EntryPolicy:
             risk_per_share = min_risk_per_share
             stop_loss = entry_px - risk_per_share
 
-        rr_target = float(self.rr_target)
+        rr_target = float(self.momentum_rr_target if self.momentum_breakout_enabled else self.rr_target)
         atr_ratio = ctx.atr_ratio
         room_to_high_atr = ctx.room_to_high_atr
         momentum_20 = ctx.momentum_20
@@ -104,6 +114,7 @@ class EntryPolicy:
             "limit_in_zone": "구간 내부 지정가",
             "reclaim": "리클레임 확인 진입",
             "next_open": "다음 시가 진입",
+            "breakout_20": "20일 고점 돌파 진입",
         }
         return EntryPlan(
             entry_type=entry_type,

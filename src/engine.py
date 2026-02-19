@@ -33,6 +33,10 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         df["vol_sma20"] = df["volume"].rolling(20, min_periods=20).mean()
     df["momentum_20"] = df["close"].pct_change(20)
     df["momentum_60"] = df["close"].pct_change(60)
+    df["ret_21"] = df["close"].pct_change(21)
+    df["ret_252"] = df["close"].pct_change(252)
+    df["mom_252_21"] = df["ret_252"] - df["ret_21"]
+    df["vol_60"] = df["close"].pct_change().rolling(60, min_periods=60).std()
     df["ma20_slope_atr"] = (df["ma20"] - df["ma20"].shift(10)) / (df["atr14"] + 1e-9)
     df["recent_high_20"] = df["high"].rolling(20, min_periods=20).max()
     strategy_params = getattr(cfg.backtest, "strategy_params", {}) or {}
@@ -79,6 +83,10 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         volume_ratio = float(volume_last / (vol_sma20_last + 1e-9))
     momentum_20 = float(last["momentum_20"]) if not pd.isna(last["momentum_20"]) else None
     momentum_60 = float(last["momentum_60"]) if not pd.isna(last["momentum_60"]) else None
+    ret_21 = float(last["ret_21"]) if not pd.isna(last["ret_21"]) else None
+    ret_252 = float(last["ret_252"]) if not pd.isna(last["ret_252"]) else None
+    mom_252_21 = float(last["mom_252_21"]) if not pd.isna(last["mom_252_21"]) else None
+    vol_60 = float(last["vol_60"]) if not pd.isna(last["vol_60"]) else None
     vol_adj_return_20 = None
     if momentum_20 is not None and atr_last and close:
         vol_adj_return_20 = float(momentum_20 / max(atr_last / close, 1e-9))
@@ -180,6 +188,10 @@ def analyze_symbol(symbol_meta: Dict[str,Any], df: pd.DataFrame, cfg) -> Optiona
         volume_ratio=volume_ratio,
         momentum_20=momentum_20,
         momentum_60=momentum_60,
+        ret_21=ret_21,
+        ret_252=ret_252,
+        mom_252_21=mom_252_21,
+        vol_60=vol_60,
         vol_adj_return_20=vol_adj_return_20,
         ma20_slope_atr=ma20_slope_atr,
         room_to_high_atr=room_to_high_atr,

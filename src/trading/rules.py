@@ -174,6 +174,7 @@ class TradeRules:
             "room_to_high": "상방 여유 공간 가중치",
             "momentum_20": "20일 모멘텀 가중치",
             "momentum_60": "60일 모멘텀 가중치",
+            "cross_momentum_252_21": "12-1 모멘텀(252-21) 가중치",
             "ma20_slope": "MA20 기울기 가중치",
             "atr_ratio": "ATR 비율 가중치",
             "vol_adj_return_20": "20일 변동성 대비 수익 가중치",

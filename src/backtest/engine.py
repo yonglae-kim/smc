@@ -24,6 +24,24 @@ def _normalize_strategy_context(ctx: AnalysisContext | Dict[str, Any]) -> Analys
     return ctx.model_copy(update={"tags": tags, "tag_confluence_ob_fvg": bool(confluence)})
 
 
+def _assign_cross_sectional_scores(rows: List[List[Any]]) -> None:
+    def _assign_z(key: str, out_key: str) -> None:
+        vals = [float(r[2].get(key)) for r in rows if r[2].get(key) is not None]
+        if len(vals) < 2:
+            for r in rows:
+                r[2][out_key] = 0.0
+            return
+        mean = float(sum(vals) / len(vals))
+        var = float(sum((v - mean) ** 2 for v in vals) / len(vals))
+        std = var ** 0.5
+        for r in rows:
+            v = r[2].get(key)
+            r[2][out_key] = 0.0 if v is None or std <= 1e-9 else float((float(v) - mean) / std)
+
+    _assign_z("mom_252_21", "mom_252_21_z")
+    _assign_z("vol_60", "vol_60_z")
+
+
 def run_backtest(
     symbols_meta: List[Dict[str, Any]],
     ohlcv_map: Dict[str, pd.DataFrame],
@@ -256,6 +274,7 @@ def run_backtest(
                 day_candidates.append((float(signal.score), sym, ctx, df_full, signal, entry_plan, meta.get("name", "")))
 
             stats["candidates"] += len(day_candidates)
+            _assign_cross_sectional_scores(day_candidates)
             selected_pairs = trade_rules.select_buy_candidates([(c[4], c[5]) for c in day_candidates])
             selected_symbols = {p[0].symbol for p in selected_pairs}
             if not selected_symbols:
