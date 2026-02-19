@@ -1,5 +1,5 @@
 # kquant_smc_reporter
-Daily (19:00 KST) batch analyzer for KOSPI+KOSDAQ (전체 유동성 랭킹), generating **candidates + context** (no buy/sell signals) and a single-file HTML report with embedded candlestick charts.
+Daily (18:00 KST) batch analyzer for KOSPI+KOSDAQ (전체 유동성 랭킹), generating **candidates + context** (no buy/sell signals) and a single-file HTML report with embedded candlestick charts.
 
 ## Quickstart
 ```bash
@@ -13,9 +13,9 @@ python main.py --config config.yaml
 
 ## Scheduling
 ### cron (Linux)
-Run at 19:00 KST every day:
+Run at 18:00 KST every day:
 ```cron
-0 19 * * * /path/to/.venv/bin/python /path/to/kquant_smc_reporter/main.py --config /path/to/kquant_smc_reporter/config.yaml >> /path/to/logs/kquant.log 2>&1
+0 18 * * * /path/to/.venv/bin/python /path/to/kquant_smc_reporter/main.py --config /path/to/kquant_smc_reporter/config.yaml >> /path/to/logs/kquant.log 2>&1
 ```
 Or use the helper script to register a single cron entry (skips if already present):
 ```bash

@@ -60,7 +60,7 @@ report:
   max_table_rows: 500
   chart_lookback: 180
   include_sort_search_js: true
-  execution_guide: "이 리포트는 19:00 KST 종가 이후 계산되며, 다음 거래일 시가 기준 실행을 가정합니다."
+  execution_guide: "이 리포트는 18:00 KST 종가 이후 계산되며, 다음 거래일 시가 기준 실행을 가정합니다."
   tp_sl_conflict_note: "OHLC만 있을 때 TP/SL 동시 터치 시 보수적(Stop 우선) 가정."
 trade:
   execution_delay_days: 1
