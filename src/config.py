@@ -54,7 +54,7 @@ class ReportCfg(BaseModel):
     include_sort_search_js: bool = True
     chart_image_mode: str = "inline_base64"  # inline_base64 | file_link
     mobile_light_mode: bool = True
-    execution_guide: str = "이 리포트는 19:00 KST 종가 이후 계산되며, 다음 거래일 시가 기준 실행을 가정합니다."
+    execution_guide: str = "이 리포트는 18:00 KST 종가 이후 계산되며, 다음 거래일 시가 기준 실행을 가정합니다."
     tp_sl_conflict_note: str = "OHLC만 있을 때 TP/SL 동시 터치 시 보수적(Stop 우선) 가정."
 
 class TradeCfg(BaseModel):
