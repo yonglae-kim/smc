@@ -478,9 +478,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     {% endif %}
   {% endfor %}
   {% set trend_ratio = ((trend.v / (table_rows|length)) * 100) if table_rows else 0 %}
-  {% set watch_count = pullback_buy_rows|length %}
-  {% set immediate_count = immediate_buy_rows|length %}
-  {% set watch_surge = watch_count >= (immediate_count + 5) %}
+  {% set merged_buy_rows = immediate_buy_rows + pullback_buy_rows %}
 
   <div class="story-strip" aria-label="story-card-strip">
     <div class="story-card">
@@ -490,24 +488,6 @@ document.addEventListener("DOMContentLoaded",()=>{
       <details class="story-note">
         <summary>왜 중요한가?</summary>
         <div>추세 정렬이 잘 된 종목 비중이 높을수록 돌파·추세 추종 전략의 성공 확률이 개선됩니다.</div>
-      </details>
-    </div>
-    <div class="story-card">
-      <div class="story-title">즉시 진입 평균 RR</div>
-      <div class="story-metric">⚖️ {{ "%.2f"|format(avg_rr) }}</div>
-      <div class="story-description">오늘 즉시 진입 후보의 기대 보상/위험 평균입니다.</div>
-      <details class="story-note">
-        <summary>왜 중요한가?</summary>
-        <div>평균 RR이 높을수록 동일 손실 대비 기대수익 여지가 커져 포트폴리오 효율에 유리합니다.</div>
-      </details>
-    </div>
-    <div class="story-card">
-      <div class="story-title">관망 종목 급증 여부</div>
-      <div class="story-metric">👀 {{ '급증' if watch_surge else '안정' }} ({{ watch_count }}개)</div>
-      <div class="story-description">되돌림 대기 후보 수가 즉시 진입 후보보다 크게 많으면 급증으로 표시합니다.</div>
-      <details class="story-note">
-        <summary>왜 중요한가?</summary>
-        <div>관망 후보 급증은 단기 과열·진입 타이밍 미스매치 신호일 수 있어 추격 매수 리스크 점검이 필요합니다.</div>
       </details>
     </div>
   </div>
@@ -548,6 +528,15 @@ document.addEventListener("DOMContentLoaded",()=>{
 
 <h2 class="section-title">매수 후보 (다음 세션)</h2>
 <div class="small">시그널은 종가 기준 산출, {{ buy_valid_from }}부터 유효.</div>
+<details class="story-note" style="margin:8px 0 12px 0">
+  <summary>진입 로직별 진입 방법 힌트</summary>
+  <div style="margin-top:6px">
+    <div>• 되돌림 지정가(limit_pullback): 핵심 구간 재터치 시 분할 접근</div>
+    <div>• 리클레임 확인(reclaim): 지지 회복 확인 후 체결 우선</div>
+    <div>• 다음 시가 진입(next_open): 조건 충족 시 다음 세션 시가 기준 대응</div>
+    <div>• 20일 고점 돌파(breakout_20): 돌파 확인 후 추세 추종</div>
+  </div>
+</details>
 <div class="market-tabs" data-market-tab-group="buy">
   <button class="market-tab-btn active" type="button" data-market="all" onclick="applyMarketTab('buy','all')">전체</button>
   <button class="market-tab-btn" type="button" data-market="KOSPI" onclick="applyMarketTab('buy','KOSPI')">코스피</button>
@@ -556,13 +545,18 @@ document.addEventListener("DOMContentLoaded",()=>{
   <button class="market-tab-btn" type="button" data-market="ETN" onclick="applyMarketTab('buy','ETN')">ETN</button>
 </div>
 
-<h3 class="section-title">즉시 진입 후보</h3>
+<h3 class="section-title">매수 후보</h3>
+<div class="mobile-only" style="margin-bottom:8px">
+  <button class="sort-btn" type="button" onclick="openSortSheet('pullbackMobileList')">매수후보 정렬</button>
+</div>
 <div class="table-wrap desktop-only">
-  <table>
+  <table id="buyCandidatesTable">
     <thead>
       <tr>
         <th>순위</th>
+        <th>후보 구분</th>
         <th>점수</th>
+        <th>복귀가능성</th>
         <th>심볼</th>
         <th>종목명</th>
         <th>시장</th>
@@ -575,100 +569,18 @@ document.addEventListener("DOMContentLoaded",()=>{
       </tr>
     </thead>
     <tbody>
-    {% for b in immediate_buy_rows %}
-      <tr data-buy-market-item="1" data-market="{{ b.market }}">
-        <td>{{ b.rank }}</td>
-        <td>{{ "%.2f"|format(b.signal.score) }}</td>
-        <td>{{ b.symbol }}</td>
-        <td>{{ b.name }}</td>
-        <td>{{ b.market }}</td>
-        <td>타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</td>
-        <td>{{ "%.0f"|format(b.entry_plan.entry_price) }}</td>
-        <td>{{ "%.0f"|format(b.entry_plan.stop_loss) }}</td>
-        <td>{{ "%.0f"|format(b.entry_plan.take_profit) }}</td>
-        <td>{{ "%.2f"|format(b.entry_plan.rr) }}</td>
-        <td>
-          {% set total = b.gates|length %}
-          {% set passed = b.gates|selectattr('pass')|list|length %}
-          {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
-          {{ passed }}/{{ total }}
-          {% if failed_keys %}
-            ({{ failed_keys[:2]|join(', ') }})
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-<div class="mobile-only mobile-candidate-list">
-  {% for b in immediate_buy_rows %}
-  <div class="mobile-candidate-card" data-buy-market-item="1" data-market="{{ b.market }}">
-    {% set total = b.gates|length %}
-    {% set passed = b.gates|selectattr('pass')|list|length %}
-    {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
-    {% set detail = (buy_details|selectattr('symbol', 'equalto', b.symbol)|list|first) %}
-    <div class="mobile-candidate-head">
-      <div class="mobile-candidate-rank">#{{ b.rank }}</div>
-      <div class="mobile-candidate-score">{{ "%.2f"|format(b.signal.score) }}</div>
-      <div class="mobile-candidate-main">
-        <div class="mobile-candidate-symbol-line">
-          <span class="mobile-candidate-symbol">{{ b.symbol }}</span>
-          <span class="mobile-candidate-name">{{ b.name }}</span>
-          <span class="mobile-candidate-entry">{{ b.market }}</span>
-          <span class="mobile-candidate-entry">타입 {{ b.entry_plan.entry_type_label or b.entry_plan.entry_type }}</span>
-        </div>
-        <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
-      </div>
-    </div>
-    <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
-    <details>
-      <summary>상세 보기</summary>
-      {% if detail %}
-      <div class="mobile-candidate-detail">
-        <img src="{{ detail.chart_src }}" alt="{{ detail.symbol }} 차트"/>
-        <div class="small" style="margin-top:8px">RR {{ "%.2f"|format(detail.entry_plan.rr) }} · 기대수익 {{ "%.2f"|format(detail.entry_plan.expected_return*100) }}%</div>
-        <div style="font-weight:700;margin:8px 0 4px 0">진입 사유</div>
-        <pre>{{ detail.reason_text }}</pre>
-      </div>
-      {% else %}
-      <div class="small" style="margin-top:6px">상세 데이터가 없습니다.</div>
-      {% endif %}
-    </details>
-  </div>
-  {% endfor %}
-</div>
-
-<h3 class="section-title">되돌림 대기 후보</h3>
-<div class="small" style="margin-bottom:8px">점수=종합매력도, 복귀가능성=진입가 재터치 확률</div>
-<div class="table-wrap desktop-only">
-  <table id="pullbackTable">
-    <thead>
-      <tr>
-        <th class="desktop-sort" onclick="sortTable(0, null, 'pullbackTable')">순위</th>
-        <th class="desktop-sort" onclick="sortTable(1, null, 'pullbackTable')">점수</th>
-        <th class="desktop-sort" onclick="sortTable(2, null, 'pullbackTable')">복귀가능성</th>
-        <th>심볼</th>
-        <th>종목명</th>
-        <th>시장</th>
-        <th>진입 타입</th>
-        <th>진입가</th>
-        <th>손절</th>
-        <th>목표</th>
-        <th>RR</th>
-        <th>게이트</th>
-      </tr>
-    </thead>
-    <tbody>
-  {% for b in pullback_buy_rows %}
+    {% for b in merged_buy_rows %}
       {% set detail = (buy_details|selectattr('symbol', 'equalto', b.symbol)|list|first) %}
       {% set atr14 = (detail.atr14 if detail else none) %}
       {% set close_px = (detail.close if detail else none) %}
       {% set distance_atr = ((close_px - b.entry_plan.entry_price)|abs / atr14) if (atr14 is not none and atr14 > 0 and close_px is not none) else none %}
-      <tr class="data-row" data-progressive-group="watch-row-desktop" data-buy-market-item="1" data-market="{{ b.market }}">
-        <td data-sort="{{ b.rank }}">{{ b.rank }}</td>
-        <td data-sort="{{ b.signal.score }}">{{ "%.2f"|format(b.signal.score) }}</td>
-        <td data-sort="{{ b.fill_likelihood or 0 }}">복귀가능성 {{ "%.0f"|format((b.fill_likelihood or 0) * 100) }}%</td>
+      {% set is_immediate = b in immediate_buy_rows %}
+      {% set fill_text = '-' if is_immediate else ("%.0f"|format((b.fill_likelihood or 0) * 100) ~ '%') %}
+      <tr class="data-row" data-buy-market-item="1" data-market="{{ b.market }}">
+        <td>{{ b.rank }}</td>
+        <td>{{ '즉시진입' if is_immediate else '되돌림대기' }}</td>
+        <td>{{ "%.2f"|format(b.signal.score) }}</td>
+        <td>{{ fill_text }}</td>
         <td>{{ b.symbol }}</td>
         <td>{{ b.name }}</td>
         <td>{{ b.market }}</td>
@@ -688,7 +600,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         </td>
       </tr>
       <tr class="detail-row" data-buy-market-item="1" data-market="{{ b.market }}">
-        <td colspan="12">
+        <td colspan="13">
           <div class="inline-detail">
             <div style="font-weight:700">핵심 근거</div>
             <div class="small" style="margin-top:4px">distance_atr: {{ "%.2f"|format(distance_atr) if distance_atr is not none else "-" }} · dist_to_ob_atr: {{ "%.2f"|format(detail.dist_to_ob_atr) if detail and detail.dist_to_ob_atr is not none else "-" }} · entry_type: {{ b.entry_plan.entry_type }} · atr_ratio: {{ "%.2f"|format(detail.atr_ratio) if detail and detail.atr_ratio is not none else "-" }}</div>
@@ -699,13 +611,11 @@ document.addEventListener("DOMContentLoaded",()=>{
     </tbody>
   </table>
 </div>
-<div class="mobile-only" style="margin-bottom:8px">
-  <button class="sort-btn" type="button" onclick="openSortSheet('pullbackMobileList')">되돌림 정렬</button>
-</div>
 <div class="mobile-only mobile-candidate-list" id="pullbackMobileList">
-  {% for b in pullback_buy_rows %}
+  {% for b in merged_buy_rows %}
+  {% set is_immediate = b in immediate_buy_rows %}
   {% set fill_pct = ((b.fill_likelihood or 0) * 100) %}
-  <div class="mobile-candidate-card" data-progressive-group="watch-row-mobile" data-fill-likelihood="{{ b.fill_likelihood or 0 }}" data-score="{{ b.signal.score }}" data-rank="{{ b.rank }}" data-buy-market-item="1" data-market="{{ b.market }}">
+  <div class="mobile-candidate-card" data-buy-market-item="1" data-market="{{ b.market }}">
     {% set total = b.gates|length %}
     {% set passed = b.gates|selectattr('pass')|list|length %}
     {% set failed_keys = b.gates|rejectattr('pass')|map(attribute='key')|list %}
@@ -723,17 +633,14 @@ document.addEventListener("DOMContentLoaded",()=>{
         <div class="mobile-candidate-price">진입 {{ "%.0f"|format(b.entry_plan.entry_price) }} · 손절 {{ "%.0f"|format(b.entry_plan.stop_loss) }} · 목표 {{ "%.0f"|format(b.entry_plan.take_profit) }}</div>
       </div>
     </div>
-    <div class="mobile-candidate-gate">복귀가능성 {{ "%.0f"|format(fill_pct) }}% · 점수 {{ "%.2f"|format(b.signal.score) }}</div>
+    <div class="mobile-candidate-gate">구분 {{ '즉시진입' if is_immediate else '되돌림대기' }}{% if not is_immediate %} · 복귀가능성 {{ "%.0f"|format(fill_pct) }}%{% endif %}</div>
     <div class="mobile-candidate-gate">게이트 {{ passed }}/{{ total }}{% if failed_keys %} · 실패 {{ failed_keys[:2]|join(', ') }}{% endif %}</div>
     <details>
       <summary>상세 보기</summary>
       {% if detail %}
-      {% set atr14 = detail.atr14 %}
-      {% set distance_atr = ((detail.close - b.entry_plan.entry_price)|abs / atr14) if (atr14 is not none and atr14 > 0) else none %}
       <div class="mobile-candidate-detail">
         <img src="{{ detail.chart_src }}" alt="{{ detail.symbol }} 차트"/>
         <div class="small" style="margin-top:8px">RR {{ "%.2f"|format(detail.entry_plan.rr) }} · 기대수익 {{ "%.2f"|format(detail.entry_plan.expected_return*100) }}%</div>
-        <div class="small" style="margin-top:6px">핵심 근거 · distance_atr {{ "%.2f"|format(distance_atr) if distance_atr is not none else "-" }} · dist_to_ob_atr {{ "%.2f"|format(detail.dist_to_ob_atr) if detail.dist_to_ob_atr is not none else "-" }} · entry_type {{ b.entry_plan.entry_type }} · atr_ratio {{ "%.2f"|format(detail.atr_ratio) if detail.atr_ratio is not none else "-" }}</div>
         <div style="font-weight:700;margin:8px 0 4px 0">진입 사유</div>
         <pre>{{ detail.reason_text }}</pre>
       </div>
@@ -744,11 +651,6 @@ document.addEventListener("DOMContentLoaded",()=>{
   </div>
   {% endfor %}
 </div>
-<button class="more-btn desktop-only" type="button" data-more-button="watch-row-desktop">관망 후보 더 보기</button>
-<button class="more-btn mobile-only" type="button" data-more-button="watch-row-mobile">관망 후보 더 보기</button>
-
-<h3 class="section-title">관망 후보</h3>
-<div class="small">현재 관망 후보가 없습니다.</div>
 
 <h2 class="section-title">매도 후보 (리스크 관리)</h2>
 <div class="small">보유 포지션 기준으로만 산출.</div>
