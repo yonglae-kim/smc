@@ -9,6 +9,7 @@ class TradeCfg(BaseModel):
     execution_delay_days: int = 1
     entry_price_mode: str = "next_open"
     force_top_k: int = 0
+    max_buy_candidates: int = 5
     min_score: float = 4.0
     min_expected_return: float = 0.02
     min_rr: float = 1.5
@@ -51,7 +52,14 @@ class TradeCfg(BaseModel):
     bb_squeeze_max_width: float = 0.12
     min_confirmations: int = 0
 
-    @field_validator("execution_delay_days", "force_top_k", "max_hold_days", "early_exit_rsi_macd_days", "min_confirmations")
+    @field_validator(
+        "execution_delay_days",
+        "force_top_k",
+        "max_buy_candidates",
+        "max_hold_days",
+        "early_exit_rsi_macd_days",
+        "min_confirmations",
+    )
     @classmethod
     def _non_negative_int(cls, value: int) -> int:
         if value < 0:
