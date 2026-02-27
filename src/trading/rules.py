@@ -33,6 +33,7 @@ class TradeRules:
         if backtest is not None and getattr(backtest, "fill_price", None):
             self.entry_price_mode = str(getattr(trade, "entry_price_mode", backtest.fill_price))
         self.force_top_k = int(getattr(trade, "force_top_k", 0))
+        self.max_buy_candidates = int(getattr(trade, "max_buy_candidates", 5))
 
         # Backward-compatible accessors used by pipeline/backtest call sites.
         self.min_risk_ratio = float(getattr(trade, "min_risk_ratio", 0.001))
@@ -106,8 +107,8 @@ class TradeRules:
             forced = ranked[: self.force_top_k]
             merged = passing + [s for s in forced if s[0].symbol not in {p[0].symbol for p in passing}]
             merged.sort(key=lambda x: (-x[0].score, x[0].symbol))
-            return merged
-        return passing
+            return merged[: self.max_buy_candidates] if self.max_buy_candidates > 0 else merged
+        return passing[: self.max_buy_candidates] if self.max_buy_candidates > 0 else passing
 
     def build_position(
         self,

@@ -16,6 +16,11 @@ class UniverseBuilder:
         self.fetcher = fetcher
         self.cfg = cfg
 
+
+    @staticmethod
+    def _is_excluded_instrument(row: Dict) -> bool:
+        return str(row.get("market", "")).upper() in {"ETF", "ETN"}
+
     def _liquidity_median(self, df: pd.DataFrame, window: int) -> float:
         if df is None or len(df) < window:
             return 0.0
@@ -42,11 +47,11 @@ class UniverseBuilder:
         symbols_all = None
         if full_scan:
             symbols_all = self.fetcher.fetch_all_symbols()
-            candidates = symbols_all
+            candidates = [row for row in symbols_all if not self._is_excluded_instrument(row)]
             scan_label = "FULL_ALL" if select_all else "FULL"
         else:
             prev = last_universe.get("universe_ranked", [])
-            prev_top = prev[: int(self.cfg.daily_recalc_top)]
+            prev_top = [row for row in prev[: int(self.cfg.daily_recalc_top)] if not self._is_excluded_instrument(row)]
             # addon: today's traded value top from both markets
             addon = set()
             k1 = self.fetcher.fetch_top_value_symbols("KOSPI", int(self.cfg.include_daily_value_rank_addon))
@@ -59,7 +64,7 @@ class UniverseBuilder:
                 sym_cache = {"asof": ymd, "symbols": sym_all}
                 self.storage.save_json("state/symbol_cache.json", sym_cache)
             meta_map = {x["symbol"]: x for x in sym_cache["symbols"]}
-            addon_rows = [meta_map[s] for s in addon if s in meta_map]
+            addon_rows = [meta_map[s] for s in addon if s in meta_map and not self._is_excluded_instrument(meta_map[s])]
             candidates = prev_top + addon_rows
             # de-dup
             seen=set(); cand=[]
